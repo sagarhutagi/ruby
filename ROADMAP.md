@@ -151,19 +151,19 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 8 --- Academic tools
-- [ ] Implement concept explainer (Beginner, Intermediate, Advanced levels).
-- [ ] Implement mathematics tutor with LaTeX solutions and SymPy engine.
-- [ ] Implement DSA tutor with visual traces and safe execution sandbox.
-- [ ] Implement Computer Networks tutor with protocol flow simulators.
-- [ ] Implement DLCD tools (truth tables, K-maps, Boolean logic).
-- [ ] Implement Operating Systems tutor (CPU scheduling, memory paging, deadlocks).
-- [ ] Implement quiz generation and scoring (MCQ, conceptual, numerical).
-- [ ] Implement flashcards with FSRS spaced repetition scheduling.
-- [ ] Implement mock examinations with timer, negative marking, and analysis.
-- [ ] Implement notes generator (revision sheets, formula sheets, summaries).
-- [ ] Implement prerequisite mapping.
-- [ ] Implement study session and revision progress tracking.
-- [ ] Add comprehensive tests for calculations, scheduling, and execution sandbox.
+- [x] Implement concept explainer (Beginner, Intermediate, Advanced levels).
+- [x] Implement mathematics tutor with LaTeX solutions and SymPy engine.
+- [x] Implement DSA tutor with visual traces and safe execution sandbox.
+- [x] Implement Computer Networks tutor with protocol flow simulators.
+- [x] Implement DLCD tools (truth tables, K-maps, Boolean logic).
+- [x] Implement Operating Systems tutor (CPU scheduling, memory paging, deadlocks).
+- [x] Implement quiz generation and scoring (MCQ, conceptual, numerical).
+- [x] Implement flashcards with FSRS spaced repetition scheduling.
+- [x] Implement mock examinations with timer, negative marking, and analysis.
+- [x] Implement notes generator (revision sheets, formula sheets, summaries).
+- [x] Implement prerequisite mapping.
+- [x] Implement study session and revision progress tracking.
+- [x] Add comprehensive tests for calculations, scheduling, and execution sandbox.
 
 **Acceptance criteria:** Each academic module performs real operations and persists relevant progress. No generated code runs unsandboxed.
 

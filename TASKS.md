@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 7 (Memory Subsystem) -> Complete. Beginning Phase 8 (Academic Learning Tools)
+- **Current Phase:** Phase 8 (Academic Learning Tools) -> Complete. Beginning Phase 9 (Knowledge Graph & Obsidian Exporter)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -87,14 +87,14 @@
 
 
 ### Phase 8: Academic Learning Tools
-- [ ] Concept explainer with difficulty levels.
-- [ ] Mathematics tutor with SymPy calculations.
-- [ ] DSA tutor with safe subprocess sandbox.
-- [ ] Computer Networks and DLCD simulators.
-- [ ] OS process scheduling and memory simulators.
-- [ ] Quiz engine with multi-format questions.
-- [ ] Flashcards with FSRS spaced repetition.
-- [ ] Academic tool tests.
+- [x] Concept explainer with difficulty levels.
+- [x] Mathematics tutor with SymPy calculations.
+- [x] DSA tutor with safe subprocess sandbox.
+- [x] Computer Networks and DLCD simulators.
+- [x] OS process scheduling and memory simulators.
+- [x] Quiz engine with multi-format questions.
+- [x] Flashcards with FSRS spaced repetition.
+- [x] Academic tool tests.
 
 ### Phase 9: Knowledge Graph & Obsidian
 - [ ] Graph node and edge schemas.

@@ -641,5 +641,427 @@ export async function importMemories(items: any[]): Promise<{ imported_count: nu
   return res.json();
 }
 
+// ==================== Academic & Learning Tools API ====================
+
+export interface FlashcardDeckItem {
+  id: string;
+  name: string;
+  description?: string;
+  subject_id?: string;
+  total_cards: number;
+  due_cards: number;
+  created_at: string;
+}
+
+export interface FlashcardItem {
+  id: string;
+  deck_id: string;
+  front: string;
+  back: string;
+  hints?: string;
+  explanation?: string;
+  state: number;
+  difficulty: number;
+  stability: number;
+  reps: number;
+  lapses: number;
+  scheduled_days: number;
+  due_date?: string;
+}
+
+export interface FlashcardReviewResult {
+  card_id: string;
+  rating: number;
+  new_state: number;
+  stability: number;
+  difficulty: number;
+  scheduled_days: number;
+  due_date: string;
+}
+
+export interface QuizSessionItem {
+  id: string;
+  title: string;
+  subject_id?: string;
+  difficulty: string;
+  total_questions: number;
+  correct_count: number;
+  score_percentage: number;
+  status: string;
+  created_at: string;
+}
+
+export interface QuizQuestionItem {
+  id: string;
+  question_type: string;
+  question_text: string;
+  options?: string[];
+  user_answer?: string;
+  is_correct?: boolean;
+  explanation?: string;
+}
+
+export interface QuizDetail {
+  id: string;
+  title: string;
+  difficulty: string;
+  status: string;
+  total_questions: number;
+  correct_count: number;
+  score_percentage: number;
+  questions: QuizQuestionItem[];
+}
+
+export interface QuizSubmissionResult {
+  quiz_id: string;
+  total_questions: number;
+  correct_count: number;
+  score_percentage: number;
+  status: string;
+  mistakes_review: {
+    question_id: string;
+    question_text: string;
+    user_answer: string;
+    correct_answer: string;
+    explanation?: string;
+  }[];
+}
+
+export interface CodeRunResult {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+  duration_ms: number;
+  error?: string;
+}
+
+export interface DSATraceResult {
+  algorithm: string;
+  steps: {
+    step: number;
+    description: string;
+    array_state: number[];
+    pointers?: Record<string, number>;
+  }[];
+  total_steps: number;
+  result: any;
+}
+
+export interface CPUScheduleResult {
+  algorithm: string;
+  timeline: {
+    pid: string;
+    start: number;
+    end: number;
+  }[];
+  process_metrics: {
+    pid: string;
+    arrival: number;
+    burst: number;
+    completion_time: number;
+    turnaround_time: number;
+    waiting_time: number;
+  }[];
+  average_waiting_time: number;
+  average_turnaround_time: number;
+}
+
+export interface BankerResult {
+  is_safe: boolean;
+  safe_sequence?: string[];
+  error?: string;
+  message?: string;
+}
+
+export interface PageReplacementResult {
+  algorithm: string;
+  page_faults: number;
+  hits: number;
+  fault_rate: number;
+  steps: {
+    step: number;
+    page: number;
+    frames: (number | null)[];
+    status: 'HIT' | 'FAULT';
+  }[];
+}
+
+export interface SubnetResult {
+  success: boolean;
+  ip_address: string;
+  prefix_length: number;
+  network_address: string;
+  broadcast_address: string;
+  netmask: string;
+  wildcard_mask: string;
+  usable_host_range: [string, string];
+  total_hosts: number;
+  usable_hosts: number;
+  is_private: boolean;
+}
+
+export interface TruthTableResult {
+  success: boolean;
+  variables: string[];
+  table: Record<string, any>[];
+  total_rows: number;
+}
+
+// Flashcards API
+export async function fetchFlashcardDecks(): Promise<FlashcardDeckItem[]> {
+  const res = await fetch(`${API_BASE}/academic/flashcards/decks`);
+  if (!res.ok) throw new Error('Failed to fetch decks');
+  return res.json();
+}
+
+export async function createFlashcardDeck(data: {
+  name: string;
+  description?: string;
+  subject_id?: string;
+}): Promise<{ id: string; name: string }> {
+  const res = await fetch(`${API_BASE}/academic/flashcards/decks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to create deck');
+  return res.json();
+}
+
+export async function deleteFlashcardDeck(deckId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/academic/flashcards/decks/${deckId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete deck');
+}
+
+export async function fetchFlashcards(deckId: string, dueOnly = false): Promise<FlashcardItem[]> {
+  const res = await fetch(`${API_BASE}/academic/flashcards/decks/${deckId}/cards?due_only=${dueOnly}`);
+  if (!res.ok) throw new Error('Failed to fetch flashcards');
+  return res.json();
+}
+
+export async function createFlashcard(data: {
+  deck_id: string;
+  front: string;
+  back: string;
+  hints?: string;
+  explanation?: string;
+}): Promise<FlashcardItem> {
+  const res = await fetch(`${API_BASE}/academic/flashcards/cards`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to create flashcard');
+  return res.json();
+}
+
+export async function reviewFlashcard(cardId: string, rating: number): Promise<FlashcardReviewResult> {
+  const res = await fetch(`${API_BASE}/academic/flashcards/cards/${cardId}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rating }),
+  });
+  if (!res.ok) throw new Error('Failed to submit review');
+  return res.json();
+}
+
+// Quizzes API
+export async function fetchQuizzes(): Promise<QuizSessionItem[]> {
+  const res = await fetch(`${API_BASE}/academic/quizzes`);
+  if (!res.ok) throw new Error('Failed to fetch quizzes');
+  return res.json();
+}
+
+export async function generateQuiz(data: {
+  title?: string;
+  subject_id?: string;
+  difficulty?: string;
+  question_count?: number;
+  time_limit_minutes?: number;
+}): Promise<{ id: string; title: string }> {
+  const res = await fetch(`${API_BASE}/academic/quizzes/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to generate quiz');
+  return res.json();
+}
+
+export async function fetchQuiz(quizId: string): Promise<QuizDetail> {
+  const res = await fetch(`${API_BASE}/academic/quizzes/${quizId}`);
+  if (!res.ok) throw new Error('Failed to fetch quiz');
+  return res.json();
+}
+
+export async function submitQuiz(quizId: string, answers: Record<string, string>): Promise<QuizSubmissionResult> {
+  const res = await fetch(`${API_BASE}/academic/quizzes/${quizId}/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answers }),
+  });
+  if (!res.ok) throw new Error('Failed to submit quiz');
+  return res.json();
+}
+
+// Math API
+export async function solveMathEquation(equation: string, variable = 'x'): Promise<any> {
+  const res = await fetch(`${API_BASE}/academic/math/solve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ equation, variable }),
+  });
+  if (!res.ok) throw new Error('Failed to solve equation');
+  return res.json();
+}
+
+export async function differentiateMath(expression: string, variable = 'x', order = 1): Promise<any> {
+  const res = await fetch(`${API_BASE}/academic/math/diff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expression, variable, order }),
+  });
+  if (!res.ok) throw new Error('Failed to differentiate expression');
+  return res.json();
+}
+
+export async function integrateMath(
+  expression: string,
+  variable = 'x',
+  lowerLimit?: string,
+  upperLimit?: string
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/academic/math/integrate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      expression,
+      variable,
+      lower_limit: lowerLimit || null,
+      upper_limit: upperLimit || null,
+    }),
+  });
+  if (!res.ok) throw new Error('Failed to integrate expression');
+  return res.json();
+}
+
+export async function simplifyMath(expression: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/academic/math/simplify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expression, variable: 'x' }),
+  });
+  if (!res.ok) throw new Error('Failed to simplify expression');
+  return res.json();
+}
+
+export async function computeMatrix(matrix: number[][], operation = 'determinant'): Promise<any> {
+  const res = await fetch(`${API_BASE}/academic/math/matrix`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ matrix, operation }),
+  });
+  if (!res.ok) throw new Error('Failed to compute matrix operation');
+  return res.json();
+}
+
+// Sandbox & DSA API
+export async function runSandboxCode(code: string, timeoutSeconds = 2.5): Promise<CodeRunResult> {
+  const res = await fetch(`${API_BASE}/academic/sandbox/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, timeout_seconds: timeoutSeconds }),
+  });
+  if (!res.ok) throw new Error('Sandbox run failed');
+  return res.json();
+}
+
+export async function traceAlgorithm(
+  algorithm: string,
+  array: number[],
+  target?: number
+): Promise<DSATraceResult> {
+  const res = await fetch(`${API_BASE}/academic/dsa/trace`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ algorithm, array, target }),
+  });
+  if (!res.ok) throw new Error('DSA trace failed');
+  return res.json();
+}
+
+// Simulators API
+export async function simulateCPUScheduler(
+  algorithm: string,
+  processes: { pid: string; arrival: number; burst: number }[],
+  quantum = 2
+): Promise<CPUScheduleResult> {
+  const res = await fetch(`${API_BASE}/academic/simulators/cpu-schedule`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ algorithm, processes, quantum }),
+  });
+  if (!res.ok) throw new Error('CPU schedule simulation failed');
+  return res.json();
+}
+
+export async function simulateBankers(
+  available: number[],
+  allocation: number[][],
+  maxMatrix: number[][],
+  pids?: string[]
+): Promise<BankerResult> {
+  const res = await fetch(`${API_BASE}/academic/simulators/banker`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ available, allocation, max_matrix: maxMatrix, pids }),
+  });
+  if (!res.ok) throw new Error('Banker simulation failed');
+  return res.json();
+}
+
+export async function simulatePageReplacement(
+  algorithm: string,
+  pages: number[],
+  numFrames = 3
+): Promise<PageReplacementResult> {
+  const res = await fetch(`${API_BASE}/academic/simulators/page-replacement`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ algorithm, pages, num_frames: numFrames }),
+  });
+  if (!res.ok) throw new Error('Page replacement simulation failed');
+  return res.json();
+}
+
+export async function calculateSubnet(ipAddress: string, prefixLength = 24): Promise<SubnetResult> {
+  const res = await fetch(`${API_BASE}/academic/simulators/subnet`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ip_address: ipAddress, prefix_length: prefixLength }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Subnet calculation failed');
+  }
+  return res.json();
+}
+
+export async function generateTruthTable(expression: string): Promise<TruthTableResult> {
+  const res = await fetch(`${API_BASE}/academic/simulators/truth-table`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expression }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Truth table generation failed');
+  }
+  return res.json();
+}
+
 
 

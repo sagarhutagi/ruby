@@ -1,65 +1,70 @@
-import React from 'react';
-import { GraduationCap, Layers, Terminal, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { GraduationCap, Layers, FileQuestion, Cpu } from 'lucide-react';
+import { FlashcardSection } from '../components/academic/FlashcardSection';
+import { QuizSection } from '../components/academic/QuizSection';
+import { SimulatorsSection } from '../components/academic/SimulatorsSection';
 
 export const StudyPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'flashcards' | 'quizzes' | 'simulators'>('flashcards');
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {/* Page Header */}
       <div className="border-b border-zinc-800 pb-4">
         <h2 className="text-xl font-semibold text-zinc-100 flex items-center gap-2">
           <GraduationCap className="w-5 h-5 text-amber-400" />
-          Study & Revision Hub
+          Academic Intelligence & Study Hub
         </h2>
-        <p className="text-xs text-zinc-400">
-          Spaced repetition flashcards (FSRS), interactive tutors, and timed examination simulations.
+        <p className="text-xs text-zinc-400 mt-0.5">
+          FSRS v4 spaced repetition flashcards, automated exam simulations, and sandboxed subject tutors.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-5 rounded-xl bg-zinc-900/40 border border-zinc-800/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">FSRS Flashcards</span>
-            <Layers className="w-4 h-4 text-indigo-400" />
-          </div>
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            Free Spaced Repetition Scheduler algorithm with personalized retention tracking.
-          </p>
-          <div className="pt-2">
-            <button className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium rounded-lg transition-colors">
-              Start Due Reviews (0 due)
-            </button>
-          </div>
-        </div>
+      {/* Main Tabs */}
+      <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+        <button
+          onClick={() => setActiveTab('flashcards')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+            activeTab === 'flashcards'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          FSRS Flashcards
+        </button>
+        <button
+          onClick={() => setActiveTab('quizzes')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+            activeTab === 'quizzes'
+              ? 'bg-emerald-600 text-white shadow-md'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+          }`}
+        >
+          <FileQuestion className="w-4 h-4" />
+          Quizzes & Mock Exams
+        </button>
+        <button
+          onClick={() => setActiveTab('simulators')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+            activeTab === 'simulators'
+              ? 'bg-amber-600 text-white shadow-md'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+          }`}
+        >
+          <Cpu className="w-4 h-4" />
+          Academic Simulators & Sandbox
+        </button>
+      </div>
 
-        <div className="p-5 rounded-xl bg-zinc-900/40 border border-zinc-800/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Mock Examination</span>
-            <Clock className="w-4 h-4 text-emerald-400" />
-          </div>
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            Custom exams with time limits, negative marking, and post-exam error analysis.
-          </p>
-          <div className="pt-2">
-            <button className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium rounded-lg transition-colors">
-              Configure Mock Exam
-            </button>
-          </div>
-        </div>
-
-        <div className="p-5 rounded-xl bg-zinc-900/40 border border-zinc-800/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Sandboxed DSA Tutor</span>
-            <Terminal className="w-4 h-4 text-rose-400" />
-          </div>
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            Step-by-step algorithmic dry-runs with restricted, timeout-bounded execution.
-          </p>
-          <div className="pt-2">
-            <button className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium rounded-lg transition-colors">
-              Open DSA Workspace
-            </button>
-          </div>
-        </div>
+      {/* Active Tab Content */}
+      <div className="pt-2">
+        {activeTab === 'flashcards' && <FlashcardSection />}
+        {activeTab === 'quizzes' && <QuizSection />}
+        {activeTab === 'simulators' && <SimulatorsSection />}
       </div>
     </div>
   );
 };
+
+export default StudyPage;

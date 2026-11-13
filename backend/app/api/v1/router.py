@@ -8,6 +8,7 @@ from app.api.v1.documents import router as documents_router
 from app.api.v1.retrieval import router as retrieval_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.memories import router as memories_router
+from app.api.v1.academic import router as academic_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(health_router)
@@ -19,6 +20,8 @@ api_v1_router.include_router(documents_router)
 api_v1_router.include_router(retrieval_router)
 api_v1_router.include_router(chat_router)
 api_v1_router.include_router(memories_router)
+api_v1_router.include_router(academic_router)
+
 
 
 
