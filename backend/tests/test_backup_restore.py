@@ -35,17 +35,17 @@ def test_backup_and_restore_cycle():
         archive_path = archives[0]
         assert archive_path.stat().st_size > 0
 
-        # 2. Test restore verification dry-run
-        # We test restore against a dummy target or test archive
-        test_tar = Path(tmpdir) / "dummy.tar.gz"
-        subprocess.run(["tar", "-czf", str(test_tar), "-C", str(tmpdir), "test_backups"])
+        # 2. Test restore verification in an isolated temporary directory
+        tmp_restore_target = Path(tmpdir) / "restore_dest"
+        tmp_restore_target.mkdir(parents=True, exist_ok=True)
 
-        # Running restore on dummy archive with --force
+        # Running restore on archive into isolated target directory
         proc_restore = subprocess.run(
-            [str(restore_script), str(archive_path), "--force"],
+            [str(restore_script), str(archive_path), "--force", str(tmp_restore_target)],
             cwd=str(repo_root),
             capture_output=True,
             text=True,
         )
         assert proc_restore.returncode == 0, f"Restore failed: {proc_restore.stderr}"
         assert "System restore completed successfully" in proc_restore.stdout
+        assert (tmp_restore_target / "data" / "ruby.db").exists()

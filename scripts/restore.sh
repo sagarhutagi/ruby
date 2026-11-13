@@ -4,6 +4,7 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARCHIVE_PATH="$1"
 FORCE_FLAG="$2"
+TARGET_DIR="${3:-$DIR}"
 
 if [ -z "$ARCHIVE_PATH" ]; then
     echo "Usage: ./scripts/restore.sh <path_to_backup_archive.tar.gz> [--force]"
@@ -28,7 +29,7 @@ if [ "$FORCE_FLAG" != "--force" ] && [ -z "$FORCE_RESTORE" ] && [ -f "$PID_FILE"
     fi
 fi
 
-cd "$DIR"
+cd "$TARGET_DIR"
 
 # Create a safety backup of existing data if present
 if [ -d "data" ]; then
@@ -38,6 +39,8 @@ if [ -d "data" ]; then
 fi
 
 echo "Extracting backup archive..."
+# Clean any existing WAL/SHM to avoid page mismatches with restored database
+rm -f data/ruby.db-wal data/ruby.db-shm
 tar -xzf "$ARCHIVE_PATH"
 
 echo "Verifying restoration integrity..."

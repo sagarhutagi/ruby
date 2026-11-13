@@ -8,6 +8,7 @@ from app.services.retrieval.hybrid import hybrid_retriever, RetrievedChunk
 from app.services.retrieval.provenance import context_assembler, citation_validator
 from app.services.ai.manager import provider_manager
 from app.services.ai.base import ChatMessage
+from app.services.search.searxng import searxng_client
 
 logger = logging.getLogger("ruby.chat.engine")
 
@@ -16,10 +17,16 @@ class ChatEngine:
     """
     Academic Chat Orchestration Engine.
     Handles mode dispatch (Resource-grounded, General, Hybrid, Research),
-    context assembly, SSE token streaming, and post-generation citation validation.
+    SearXNG web search integration, context assembly, SSE token streaming,
+    and post-generation citation validation.
     """
 
-    def _build_system_prompt(self, mode: str, conversation_prompt: Optional[str] = None) -> str:
+    def _build_system_prompt(
+        self,
+        mode: str,
+        conversation_prompt: Optional[str] = None,
+        has_web_sources: bool = False,
+    ) -> str:
         base_instruction = (
             "You are RUBY, a rigorous, local-first personal academic intelligence assistant.\n"
             "Format mathematical equations in LaTeX using $...$ for inline and $$...$$ for block formulas.\n"
@@ -56,8 +63,18 @@ class ChatEngine:
                 "- Note that no specific document context has been attached for this query."
             )
 
+        web_instruction = ""
+        if has_web_sources:
+            web_instruction = (
+                "\n\nLIVE WEB SEARCH INTEGRATION (SearXNG):\n"
+                "- You have access to real-time live web search results.\n"
+                "- Cite web facts directly with clickable markdown links: [Source Title](URL) or [Web #X].\n"
+                "- Clearly distinguish web search results from locally indexed course materials.\n"
+                "- Never fabricate URLs or citations."
+            )
+
         custom = f"\nCustom Instructions:\n{conversation_prompt}\n" if conversation_prompt else ""
-        return f"{base_instruction}\n\n{mode_instruction}{custom}"
+        return f"{base_instruction}\n\n{mode_instruction}{web_instruction}{custom}"
 
     async def stream_chat(
         self,
@@ -68,6 +85,7 @@ class ChatEngine:
         subject_id: Optional[str] = None,
         document_ids: Optional[List[str]] = None,
         provider_id: Optional[str] = None,
+        web_search: bool = False,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         start_time = time.perf_counter()
 
@@ -99,28 +117,84 @@ class ChatEngine:
 
         if mode in ("resource-grounded", "hybrid", "research"):
             ret_start = time.perf_counter()
-            ret_result = await hybrid_retriever.search(
-                session=session,
-                query=user_content,
-                top_k=8 if mode == "research" else 5,
-                document_ids=document_ids,
-                subject_id=target_subject,
-            )
-            retrieval_latency_ms = (time.perf_counter() - ret_start) * 1000.0
-            retrieved_chunks = ret_result.chunks
+            try:
+                ret_result = await hybrid_retriever.search(
+                    session=session,
+                    query=user_content,
+                    top_k=8 if mode == "research" else 5,
+                    document_ids=document_ids,
+                    subject_id=target_subject,
+                )
+                retrieval_latency_ms = (time.perf_counter() - ret_start) * 1000.0
+                retrieved_chunks = ret_result.chunks
 
-            # Yield sources event so UI can display them immediately
+                # Yield sources event so UI can display them immediately
+                yield {
+                    "type": "sources",
+                    "chunks": [c.model_dump() for c in retrieved_chunks],
+                    "retrieval_latency_ms": round(retrieval_latency_ms, 2),
+                }
+            except Exception as e:
+                logger.exception("Retrieval error: %s", e)
+                yield {
+                    "type": "sources_error",
+                    "error": f"Document retrieval error: {str(e)}",
+                }
+
+        # 4. SearXNG Web Search Step (Manual Toggle or Auto-Detection)
+        web_search_sources: List[Dict[str, Any]] = []
+        should_web_search = web_search or (
+            mode in ("general", "hybrid", "research")
+            and searxng_client.is_configured()
+            and searxng_client.detect_web_search_need(user_content)
+        )
+
+        if should_web_search:
             yield {
-                "type": "sources",
-                "chunks": [c.model_dump() for c in retrieved_chunks],
-                "retrieval_latency_ms": round(retrieval_latency_ms, 2),
+                "type": "web_search_start",
+                "query": user_content,
             }
+            try:
+                web_res = await searxng_client.search(query=user_content, num_results=5)
+                if web_res.results:
+                    web_search_sources = [r.model_dump() for r in web_res.results]
+                    yield {
+                        "type": "web_sources",
+                        "sources": web_search_sources,
+                    }
+                elif web_res.error:
+                    yield {
+                        "type": "web_search_error",
+                        "error": web_res.error,
+                    }
+            except Exception as e:
+                logger.exception("SearXNG search error: %s", e)
+                yield {
+                    "type": "web_search_error",
+                    "error": f"SearXNG search error: {str(e)}",
+                }
 
-        # 4. Assemble Context & System Prompt
+        # 5. Assemble Context & System Prompt
         context_block = context_assembler.assemble_context(retrieved_chunks) if retrieved_chunks else None
-        system_prompt = self._build_system_prompt(mode, conv.system_prompt)
+        
+        web_context_block = None
+        if web_search_sources:
+            web_lines = [
+                "=== LIVE WEB SEARCH RESULTS (SearXNG) ===",
+                "Information retrieved from the live web for this query:",
+            ]
+            for i, src in enumerate(web_search_sources, 1):
+                web_lines.append(f"[Web #{i}] {src['title']}\nURL: {src['url']}\nSnippet: {src['snippet']}\n")
+            web_lines.append("=========================================")
+            web_context_block = "\n".join(web_lines)
 
-        # 5. Fetch previous conversation history (last 10 messages for context)
+        system_prompt = self._build_system_prompt(
+            mode=mode,
+            conversation_prompt=conv.system_prompt,
+            has_web_sources=bool(web_search_sources),
+        )
+
+        # 6. Fetch previous conversation history (last 10 messages for context)
         hist_stmt = (
             select(Message)
             .where(Message.conversation_id == conversation_id)
@@ -134,17 +208,39 @@ class ChatEngine:
         for m in prev_messages[:-1]:  # exclude the one we just inserted
             ai_messages.append(ChatMessage(role=m.role, content=m.content))
 
-        # Add current user prompt with context block
-        final_prompt = user_content
+        # Build final user prompt with context blocks
+        prompt_parts: List[str] = []
         if context_block and mode in ("resource-grounded", "hybrid", "research"):
-            final_prompt = f"{context_block}\n\nUser Question:\n{user_content}"
+            prompt_parts.append(context_block)
+        if web_context_block:
+            prompt_parts.append(web_context_block)
+        prompt_parts.append(f"User Question:\n{user_content}")
+        final_prompt = "\n\n".join(prompt_parts)
+
         ai_messages.append(ChatMessage(role="user", content=final_prompt))
 
-        # 6. Stream from active AI Provider
-        adapter = await provider_manager.get_active_adapter(session, provider_id=provider_id)
+        # 7. Stream from active AI Provider
+        try:
+            adapter = await provider_manager.get_active_adapter(session, provider_id=provider_id)
+        except Exception as e:
+            logger.exception("Failed to initialize active AI provider: %s", e)
+            error_msg = (
+                f"Error: Could not connect to AI provider ({str(e)}). "
+                "Please check that Ollama is running or configure an AI provider in Settings."
+            )
+            yield {"type": "token", "content": error_msg}
+            yield {
+                "type": "done",
+                "message_id": "",
+                "full_content": error_msg,
+                "citations": [],
+                "web_sources": [],
+                "diagnostics": {"error": str(e)},
+            }
+            return
+
         accumulated_text: List[str] = []
         gen_start = time.perf_counter()
-
         model_name = getattr(adapter, "default_model", getattr(adapter, "model_name", adapter.name))
 
         try:
@@ -164,17 +260,31 @@ class ChatEngine:
                 "content": error_msg,
             }
 
-        full_response = "".join(accumulated_text)
+        full_response = "".join(accumulated_text).strip()
+
+        # Handle empty model response (Root Cause Fix for Issue A)
+        if not full_response:
+            logger.warning("AI provider yielded empty response; generating helpful fallback message.")
+            full_response = (
+                "The AI model returned an empty response. "
+                "This may happen if the local model is loading into memory or timed out. "
+                "Please click Retry below to resubmit your message."
+            )
+            yield {
+                "type": "token",
+                "content": full_response,
+            }
+
         gen_latency_ms = (time.perf_counter() - gen_start) * 1000.0
         total_latency_ms = (time.perf_counter() - start_time) * 1000.0
 
-        # If general mode, append clear indication
-        if mode == "general":
+        # If general mode without web search, append clear indication
+        if mode == "general" and not web_search_sources:
             tag = "\n\n*[General Knowledge: Answered using model knowledge without document grounding]*"
             full_response += tag
             yield {"type": "token", "content": tag}
 
-        # 7. Post-generation Citation Validation
+        # 8. Post-generation Citation Validation
         validation_report = citation_validator.validate_response(
             response_text=full_response,
             retrieved_chunks=retrieved_chunks,
@@ -188,9 +298,11 @@ class ChatEngine:
             "provider": adapter.provider_type,
             "model": model_name,
             "grounding": validation_report.model_dump(),
+            "web_sources_count": len(web_search_sources),
+            "web_sources": web_search_sources,
         }
 
-        # 8. Save Assistant Message to SQLite
+        # 9. Save Assistant Message to SQLite
         assistant_msg = Message(
             conversation_id=conversation_id,
             role="assistant",
@@ -205,12 +317,13 @@ class ChatEngine:
         session.add(assistant_msg)
         await session.commit()
 
-        # 9. Final Done Event
+        # 10. Final Done Event
         yield {
             "type": "done",
             "message_id": assistant_msg.id,
             "full_content": full_response,
             "citations": [c.model_dump() for c in validation_report.citations],
+            "web_sources": web_search_sources,
             "diagnostics": diagnostics,
         }
 
@@ -223,9 +336,9 @@ class ChatEngine:
         subject_id: Optional[str] = None,
         document_ids: Optional[List[str]] = None,
         provider_id: Optional[str] = None,
+        web_search: bool = False,
     ) -> Message:
         """Non-streaming fallback method."""
-        full_text = ""
         last_event: Dict[str, Any] = {}
         async for evt in self.stream_chat(
             session=session,
@@ -235,13 +348,17 @@ class ChatEngine:
             subject_id=subject_id,
             document_ids=document_ids,
             provider_id=provider_id,
+            web_search=web_search,
         ):
-            if evt["type"] == "token":
-                full_text += evt["content"]
-            elif evt["type"] == "done":
+            if evt["type"] == "done":
                 last_event = evt
 
         msg_id = last_event.get("message_id")
+        if not msg_id:
+            # If done had no message_id (e.g. error), fetch last message
+            stmt = select(Message).where(Message.conversation_id == conversation_id).order_by(Message.created_at.desc())
+            return (await session.execute(stmt)).scalars().first()
+
         stmt = select(Message).where(Message.id == msg_id)
         return (await session.execute(stmt)).scalars().first()
 

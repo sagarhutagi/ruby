@@ -10,6 +10,7 @@ from sqlalchemy import select, func, or_
 from app.database.session import get_db
 from app.models.entities import Conversation, Message, Subject
 from app.services.chat.engine import chat_engine
+from app.services.search.searxng import searxng_client
 
 logger = logging.getLogger("ruby.api.chat")
 
@@ -71,6 +72,13 @@ class SendMessageRequest(BaseModel):
     subject_id: Optional[str] = None
     document_ids: Optional[List[str]] = None
     provider_id: Optional[str] = None
+    web_search: bool = Field(default=False, description="Enable live SearXNG web search")
+
+
+@router.get("/chat/search/status", summary="SearXNG Web Search Status")
+async def get_searxng_status():
+    """Check whether SearXNG is configured and reachable."""
+    return await searxng_client.test_connection()
 
 
 # Endpoints
@@ -275,6 +283,7 @@ async def send_message_sync(
         subject_id=req.subject_id,
         document_ids=req.document_ids,
         provider_id=req.provider_id,
+        web_search=req.web_search,
     )
     return MessageItem(
         id=msg.id,
@@ -300,6 +309,9 @@ async def stream_chat_endpoint(
     Server-Sent Events (SSE) streaming endpoint.
     Emits events:
       - event: sources (retrieved document chunks with provenance)
+      - event: web_search_start (search query for live web search)
+      - event: web_sources (retrieved web search results from SearXNG)
+      - event: web_search_error (web search warning or error)
       - event: token (incremental LLM text delta)
       - event: done (final message ID, verified citations, latency diagnostics)
     """
@@ -313,6 +325,7 @@ async def stream_chat_endpoint(
                 subject_id=req.subject_id,
                 document_ids=req.document_ids,
                 provider_id=req.provider_id,
+                web_search=req.web_search,
             ):
                 evt_type = event_data.get("type", "message")
                 yield {
@@ -323,7 +336,7 @@ async def stream_chat_endpoint(
             logger.exception("Error in SSE chat stream: %s", e)
             yield {
                 "event": "error",
-                "data": json.dumps({"error": str(e)}),
+                "data": json.dumps({"error": str(e), "message": f"Chat stream error: {str(e)}"}),
             }
 
     return EventSourceResponse(event_generator())

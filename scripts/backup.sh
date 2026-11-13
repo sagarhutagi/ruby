@@ -22,7 +22,16 @@ ITEMS_TO_BACKUP=()
 cd "$DIR"
 
 if [ -f "data/ruby.db" ]; then
+    if command -v sqlite3 >/dev/null 2>&1; then
+        sqlite3 "data/ruby.db" "PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null 2>&1 || true
+    fi
     ITEMS_TO_BACKUP+=("data/ruby.db")
+    if [ -f "data/ruby.db-wal" ]; then
+        ITEMS_TO_BACKUP+=("data/ruby.db-wal")
+    fi
+    if [ -f "data/ruby.db-shm" ]; then
+        ITEMS_TO_BACKUP+=("data/ruby.db-shm")
+    fi
 fi
 
 if [ -d "data/chroma" ]; then

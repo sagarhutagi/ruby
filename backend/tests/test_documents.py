@@ -82,10 +82,12 @@ async def test_parser_registry_extensions_and_unsupported():
 
 @pytest.mark.asyncio
 async def test_document_upload_and_duplicate_detection():
+    import uuid
+    nonce = uuid.uuid4().hex
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Create a test text file
-        file_bytes = b"Algorithmic analysis of Red-Black Trees: A balanced binary search tree with logarithmic height."
+        file_bytes = f"Algorithmic analysis of Red-Black Trees {nonce}: A balanced binary search tree with logarithmic height.".encode()
         files = {"files": ("rbt.txt", io.BytesIO(file_bytes), "text/plain")}
 
         # 1. First upload

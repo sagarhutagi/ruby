@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -25,6 +25,11 @@ import {
   GraduationCap,
   Calculator,
   Compass,
+  HelpCircle,
+  Info,
+  ExternalLink,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import {
   fetchConversation,
@@ -46,6 +51,45 @@ async function getProviders() {
   if (!res.ok) return [];
   return res.json();
 }
+
+const CHAT_MODES = [
+  {
+    id: 'resource-grounded',
+    name: 'Grounded',
+    icon: Shield,
+    color: 'text-emerald-400',
+    borderColor: 'border-emerald-500/40',
+    summary: 'Answers strictly from your uploaded course notes & textbooks with exact page citations.',
+    whenToUse: 'Use when studying exam notes, preparing for tests, or verifying course material.',
+  },
+  {
+    id: 'general',
+    name: 'General',
+    icon: Globe,
+    color: 'text-blue-400',
+    borderColor: 'border-blue-500/40',
+    summary: 'Answers using broad academic AI knowledge without consulting your uploaded documents.',
+    whenToUse: 'Use for open-ended brainstorming, asking general questions, or when you have not uploaded notes.',
+  },
+  {
+    id: 'hybrid',
+    name: 'Hybrid',
+    icon: Shuffle,
+    color: 'text-purple-400',
+    borderColor: 'border-purple-500/40',
+    summary: 'Combines your uploaded document evidence with supplementary academic insights.',
+    whenToUse: 'Use when you want your syllabus coverage plus broader background context to deepen understanding.',
+  },
+  {
+    id: 'research',
+    name: 'Research',
+    icon: Microscope,
+    color: 'text-amber-400',
+    borderColor: 'border-amber-500/40',
+    summary: 'Deep cross-document comparison and synthesis across multiple uploaded books or papers.',
+    whenToUse: 'Use for literature reviews, comparing different authors, or contrasting textbook definitions.',
+  },
+];
 
 const PROMPT_SUGGESTIONS = [
   {
@@ -79,10 +123,20 @@ export const ChatPage: React.FC = () => {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [chatMode, setChatMode] = useState<string>('resource-grounded');
   const [inputText, setInputText] = useState('');
+  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(false);
+
+  // Streaming State
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [streamingSources, setStreamingSources] = useState<any[]>([]);
+  const [streamingWebSources, setStreamingWebSources] = useState<any[]>([]);
+  const [isSearchingWeb, setIsSearchingWeb] = useState(false);
+  const [webSearchQuery, setWebSearchQuery] = useState('');
   const [abortStream, setAbortStream] = useState<(() => void) | null>(null);
+
+  // Optimistic & Error State (Fix for Issue A & B)
+  const [optimisticUserMsg, setOptimisticUserMsg] = useState<ChatMessageItem | null>(null);
+  const [chatError, setChatError] = useState<{ message: string; retryPrompt: string } | null>(null);
 
   // Modals & Panels
   const [selectedCitationChunk, setSelectedCitationChunk] = useState<any | null>(null);
@@ -90,6 +144,8 @@ export const ChatPage: React.FC = () => {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [subjectPickerOpen, setSubjectPickerOpen] = useState(false);
+  const [modeHelpOpen, setModeHelpOpen] = useState(false);
+  const [helpGuideOpen, setHelpGuideOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -121,10 +177,24 @@ export const ChatPage: React.FC = () => {
     }
   }, [inputText]);
 
+  // Unified message list reconciling optimistic user prompt with database (Issue B Root Cause Fix)
+  const displayMessages = useMemo(() => {
+    const list = [...(currentConv?.messages || [])];
+    if (optimisticUserMsg) {
+      const alreadyInList = list.some(
+        (m) => m.role === 'user' && m.content === optimisticUserMsg.content
+      );
+      if (!alreadyInList) {
+        list.push(optimisticUserMsg);
+      }
+    }
+    return list;
+  }, [currentConv?.messages, optimisticUserMsg]);
+
   // Scroll to bottom on new messages or streaming
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [currentConv?.messages, streamingText]);
+  }, [displayMessages, streamingText, chatError]);
 
   const handleSendMessage = async (customPrompt?: string) => {
     const textToSend = (customPrompt || inputText).trim();
@@ -141,13 +211,29 @@ export const ChatPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     }
 
+    // Immediately create and show the optimistic user message (Issue B Root Cause Fix)
+    const optUser: ChatMessageItem = {
+      id: `opt-${Date.now()}`,
+      conversation_id: targetConvId,
+      role: 'user',
+      content: textToSend,
+      mode: chatMode,
+      created_at: new Date().toISOString(),
+    };
+
+    setOptimisticUserMsg(optUser);
+    setChatError(null);
     setInputText('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
+
     setIsStreaming(true);
     setStreamingText('');
     setStreamingSources([]);
+    setStreamingWebSources([]);
+    setIsSearchingWeb(false);
+    setWebSearchQuery('');
 
     const cancel = streamChat(
       {
@@ -155,10 +241,22 @@ export const ChatPage: React.FC = () => {
         content: textToSend,
         mode: chatMode,
         subject_id: selectedSubjectId || undefined,
+        web_search: webSearchEnabled,
       },
       {
         onSources: (chunks) => {
           setStreamingSources(chunks);
+        },
+        onWebSearchStart: (q) => {
+          setIsSearchingWeb(true);
+          setWebSearchQuery(q);
+        },
+        onWebSources: (sources) => {
+          setIsSearchingWeb(false);
+          setStreamingWebSources(sources);
+        },
+        onWebSearchError: () => {
+          setIsSearchingWeb(false);
         },
         onToken: (token) => {
           setStreamingText((prev) => prev + token);
@@ -167,12 +265,20 @@ export const ChatPage: React.FC = () => {
           setIsStreaming(false);
           setStreamingText('');
           setStreamingSources([]);
+          setStreamingWebSources([]);
+          setIsSearchingWeb(false);
+          setOptimisticUserMsg(null);
           refetchCurrentConv();
           queryClient.invalidateQueries({ queryKey: ['conversations'] });
         },
         onError: (err) => {
+          // Meaningful error message with retry option (Issue A Root Cause Fix)
           setIsStreaming(false);
-          setStreamingText((prev) => prev + `\n\n[Error: ${err}]`);
+          setIsSearchingWeb(false);
+          setChatError({
+            message: err || 'An unexpected error occurred during chat generation.',
+            retryPrompt: textToSend,
+          });
           refetchCurrentConv();
         },
       }
@@ -187,6 +293,7 @@ export const ChatPage: React.FC = () => {
       setAbortStream(null);
     }
     setIsStreaming(false);
+    setIsSearchingWeb(false);
     refetchCurrentConv();
   };
 
@@ -213,6 +320,9 @@ export const ChatPage: React.FC = () => {
   };
 
   const selectedSubject = subjects?.find((s: any) => s.id === selectedSubjectId);
+  const activeModeObj = CHAT_MODES.find((m) => m.id === chatMode) || CHAT_MODES[0];
+
+  const hasMessages = displayMessages.length > 0 || isStreaming || !!chatError;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#212121] text-[#ececec] relative overflow-hidden select-text">
@@ -246,9 +356,7 @@ export const ChatPage: React.FC = () => {
                     key={p.id}
                     onClick={() => setModelPickerOpen(false)}
                     className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-colors ${
-                      p.is_default
-                        ? 'bg-[#383838] text-white'
-                        : 'hover:bg-[#333333] text-[#b4b4b4]'
+                      p.is_default ? 'bg-[#383838] text-white' : 'hover:bg-[#333333] text-[#b4b4b4]'
                     }`}
                   >
                     <div>
@@ -301,9 +409,7 @@ export const ChatPage: React.FC = () => {
                       setSubjectPickerOpen(false);
                     }}
                     className={`w-full text-left p-2 rounded-lg truncate transition-colors ${
-                      selectedSubjectId === s.id
-                        ? 'bg-[#383838] text-white'
-                        : 'text-[#b4b4b4] hover:bg-[#333]'
+                      selectedSubjectId === s.id ? 'bg-[#383838] text-white' : 'text-[#b4b4b4] hover:bg-[#333]'
                     }`}
                   >
                     {s.name}
@@ -313,57 +419,45 @@ export const ChatPage: React.FC = () => {
             )}
           </div>
 
-          {/* Mode Switcher Group (ChatGPT Search / Deep Research Pill style) */}
-          <div className="hidden sm:flex items-center bg-[#282828] p-0.5 rounded-xl border border-[#383838]">
+          {/* Mode Switcher Group with Discoverability Tooltip/Help */}
+          <div className="flex items-center bg-[#282828] p-0.5 rounded-xl border border-[#383838]">
+            {CHAT_MODES.map((mode) => {
+              const Icon = mode.icon;
+              const isActive = chatMode === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  onClick={() => setChatMode(mode.id)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    isActive ? 'bg-[#3e3e3e] text-white shadow-sm' : 'text-[#b4b4b4] hover:text-white'
+                  }`}
+                  title={`${mode.name} Mode: ${mode.summary}`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${mode.color}`} />
+                  <span className="hidden sm:inline">{mode.name}</span>
+                </button>
+              );
+            })}
+
+            {/* Mode Guide Info Button */}
             <button
-              onClick={() => setChatMode('resource-grounded')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                chatMode === 'resource-grounded'
-                  ? 'bg-[#3e3e3e] text-white shadow-sm'
-                  : 'text-[#b4b4b4] hover:text-white'
-              }`}
-              title="Grounded in uploaded documents with citations"
+              onClick={() => setModeHelpOpen(true)}
+              className="p-1 text-[#8e8e8e] hover:text-[#ececec] rounded hover:bg-[#383838] transition-colors ml-0.5"
+              title="Explain Chat Modes"
             >
-              <Shield className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Grounded</span>
-            </button>
-            <button
-              onClick={() => setChatMode('general')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                chatMode === 'general'
-                  ? 'bg-[#3e3e3e] text-white shadow-sm'
-                  : 'text-[#b4b4b4] hover:text-white'
-              }`}
-              title="General knowledge model reasoning"
-            >
-              <Globe className="w-3.5 h-3.5 text-blue-400" />
-              <span>General</span>
-            </button>
-            <button
-              onClick={() => setChatMode('hybrid')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                chatMode === 'hybrid'
-                  ? 'bg-[#3e3e3e] text-white shadow-sm'
-                  : 'text-[#b4b4b4] hover:text-white'
-              }`}
-              title="Blended evidence and reasoning"
-            >
-              <Shuffle className="w-3.5 h-3.5 text-purple-400" />
-              <span>Hybrid</span>
-            </button>
-            <button
-              onClick={() => setChatMode('research')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                chatMode === 'research'
-                  ? 'bg-[#3e3e3e] text-white shadow-sm'
-                  : 'text-[#b4b4b4] hover:text-white'
-              }`}
-              title="Comparative cross-document synthesis"
-            >
-              <Microscope className="w-3.5 h-3.5 text-amber-400" />
-              <span>Research</span>
+              <Info className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {/* System Getting Started Guide Button */}
+          <button
+            onClick={() => setHelpGuideOpen(true)}
+            className="p-1.5 text-[#b4b4b4] hover:text-white rounded-lg hover:bg-[#2f2f2f] transition-colors flex items-center gap-1 text-xs"
+            title="Ruby System & Features Guide"
+          >
+            <HelpCircle className="w-4 h-4 text-rose-400" />
+            <span className="hidden md:inline text-xs font-medium">Guide</span>
+          </button>
 
           {/* Export Chat */}
           {currentConv && (
@@ -380,11 +474,12 @@ export const ChatPage: React.FC = () => {
 
       {/* Main Conversation Stream */}
       <div className="flex-1 overflow-y-auto">
-        {currentConv && currentConv.messages && currentConv.messages.length > 0 ? (
-          <div className="max-w-3xl mx-auto w-full px-4 pt-6 pb-40 space-y-7">
-            {currentConv.messages.map((msg: ChatMessageItem) => {
+        {hasMessages ? (
+          <div className="max-w-3xl mx-auto w-full px-4 pt-6 pb-44 space-y-7">
+            {displayMessages.map((msg: ChatMessageItem) => {
               const isUser = msg.role === 'user';
               const isDiagExpanded = !!expandedDiagnostics[msg.id];
+              const webSources = msg.diagnostics?.web_sources || [];
 
               return (
                 <div
@@ -429,12 +524,12 @@ export const ChatPage: React.FC = () => {
                           }}
                         />
 
-                        {/* Verified Sources Drawer (ChatGPT Web Search & NotebookLM style) */}
+                        {/* Verified Local Course Document Citations */}
                         {msg.citations && msg.citations.length > 0 && (
                           <div className="mt-4 pt-3 border-t border-[#2e2e2e] space-y-2">
                             <span className="text-xs font-medium text-[#8e8e8e] flex items-center gap-1.5">
                               <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
-                              Verified Sources ({msg.citations.length})
+                              Course Document Sources ({msg.citations.length}):
                             </span>
                             <div className="flex flex-wrap gap-2">
                               {msg.citations.map((c: any, cIdx: number) => (
@@ -462,6 +557,34 @@ export const ChatPage: React.FC = () => {
                           </div>
                         )}
 
+                        {/* Distinct SearXNG Live Web Sources */}
+                        {webSources.length > 0 && (
+                          <div className="mt-3 pt-2.5 border-t border-[#2e2e2e] space-y-1.5">
+                            <span className="text-xs font-medium text-blue-400 flex items-center gap-1.5">
+                              <Globe className="w-3.5 h-3.5 text-blue-400" />
+                              Live Web Sources via SearXNG ({webSources.length}):
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              {webSources.map((w: any, wIdx: number) => (
+                                <a
+                                  key={wIdx}
+                                  href={w.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full border border-blue-800/60 bg-blue-950/40 text-blue-300 hover:bg-blue-900/60 hover:text-white transition-colors cursor-pointer shadow-sm"
+                                  title={w.snippet}
+                                >
+                                  <Globe className="w-3 h-3 text-blue-400 shrink-0" />
+                                  <span className="font-sans truncate max-w-[220px]">
+                                    {w.title}
+                                  </span>
+                                  <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Diagnostics Detail Box (Collapsible) */}
                         {isDiagExpanded && msg.diagnostics && (
                           <div className="mt-3 p-3 bg-[#191919] rounded-xl border border-[#333] text-xs font-mono text-[#a1a1aa] space-y-1">
@@ -469,6 +592,9 @@ export const ChatPage: React.FC = () => {
                             <div>Generation Latency: {msg.diagnostics.generation_latency_ms} ms</div>
                             <div>Total Latency: {msg.diagnostics.total_latency_ms} ms</div>
                             <div>Tokens Used: ~{msg.tokens_used}</div>
+                            {msg.diagnostics.web_sources_count !== undefined && (
+                              <div>Live Web Sources: {msg.diagnostics.web_sources_count}</div>
+                            )}
                             {msg.diagnostics.grounding && (
                               <div>
                                 Grounding Verification:{' '}
@@ -486,7 +612,7 @@ export const ChatPage: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Bottom Action Bar (ChatGPT Style) */}
+                        {/* Bottom Action Bar */}
                         <div className="flex items-center gap-2 mt-3 text-[#8e8e8e]">
                           <button
                             onClick={() => handleCopyMessage(msg.id, msg.content)}
@@ -519,7 +645,7 @@ export const ChatPage: React.FC = () => {
                                   [msg.id]: !prev[msg.id],
                                 }))
                               }
-                              className="text-[11px] font-mono px-2 py-1 rounded hover:bg-[#2f2f2f] transition-colors flex items-center gap-1"
+                              className="text-[11px] font-mono px-2 py-1 rounded hover:bg-[#2f2f2f] transition-colors flex items-center gap-1 cursor-pointer"
                             >
                               <span>Diagnostics</span>
                               {isDiagExpanded ? (
@@ -546,9 +672,23 @@ export const ChatPage: React.FC = () => {
                   </div>
                   <span className="font-medium text-white text-sm">Ruby</span>
                   <span className="text-rose-400 animate-pulse font-mono">• Formulating response</span>
+
+                  {/* Web Search Live Searching Indicator */}
+                  {isSearchingWeb && (
+                    <span className="flex items-center gap-1 text-blue-400 bg-blue-950/60 border border-blue-800/60 px-2 py-0.5 rounded-full text-[11px] animate-pulse">
+                      <Globe className="w-3 h-3 animate-spin" />
+                      Searching web via SearXNG...
+                    </span>
+                  )}
+
                   {streamingSources.length > 0 && (
                     <span className="text-[11px] font-mono text-[#a1a1aa]">
-                      ({streamingSources.length} source chunks loaded)
+                      ({streamingSources.length} document chunks)
+                    </span>
+                  )}
+                  {streamingWebSources.length > 0 && (
+                    <span className="text-[11px] font-mono text-blue-400">
+                      ({streamingWebSources.length} web sources)
                     </span>
                   )}
                 </div>
@@ -557,10 +697,35 @@ export const ChatPage: React.FC = () => {
                   {streamingText ? (
                     <MarkdownRenderer content={streamingText} />
                   ) : (
-                    <div className="text-sm text-[#8e8e8e] animate-pulse">
-                      Retrieving evidence & formulating academic answer...
+                    <div className="text-sm text-[#8e8e8e] animate-pulse flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-rose-400" />
+                      {isSearchingWeb
+                        ? `Querying SearXNG for "${webSearchQuery}"...`
+                        : 'Retrieving evidence & formulating academic answer...'}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Chat Error Card with Retry Button (Fix for Issue A) */}
+            {chatError && (
+              <div className="w-full pl-9">
+                <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-800/60 text-xs text-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-sm text-white">Generation Error</div>
+                      <p className="mt-0.5 text-rose-300 leading-relaxed">{chatError.message}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleSendMessage(chatError.retryPrompt)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-medium transition-colors cursor-pointer shadow shrink-0"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Retry Request</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -579,7 +744,7 @@ export const ChatPage: React.FC = () => {
                 What can I help you learn today?
               </h2>
               <p className="text-sm text-[#8e8e8e] max-w-md mx-auto leading-relaxed">
-                Local-first academic copilot grounded in your course materials, lecture slides, and notes with zero cloud leakage.
+                Local-first academic copilot grounded in your course materials with zero cloud leakage, SearXNG web search, and step-by-step reasoning.
               </p>
             </div>
 
@@ -625,14 +790,15 @@ export const ChatPage: React.FC = () => {
                   handleSendMessage();
                 }
               }}
-              placeholder={`Ask anything about your courses or notes in ${chatMode} mode...`}
+              placeholder={`Ask anything in ${activeModeObj.name} mode...`}
               className="w-full bg-transparent text-[#ececec] placeholder:text-[#8e8e8e] text-[15px] px-3 pt-1.5 pb-1 resize-none outline-none max-h-52 overflow-y-auto leading-relaxed"
             />
 
             {/* Inner Bottom Controls Toolbar */}
             <div className="flex items-center justify-between px-2 pt-1">
-              {/* Left: Mode / Subject Attachments */}
-              <div className="flex items-center gap-1.5">
+              {/* Left: Mode / Subject / SearXNG Web Search Toggle */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Subject context picker */}
                 <button
                   type="button"
                   onClick={() => setSubjectPickerOpen(true)}
@@ -642,22 +808,39 @@ export const ChatPage: React.FC = () => {
                   <Plus className="w-4 h-4" />
                 </button>
 
+                {/* Mode Selector Pill */}
                 <button
                   type="button"
                   onClick={() => {
-                    const modes = ['resource-grounded', 'general', 'hybrid', 'research'];
-                    const nextMode = modes[(modes.indexOf(chatMode) + 1) % modes.length];
-                    setChatMode(nextMode);
+                    const idx = CHAT_MODES.findIndex((m) => m.id === chatMode);
+                    const next = CHAT_MODES[(idx + 1) % CHAT_MODES.length];
+                    setChatMode(next.id);
                   }}
-                  className="px-2.5 py-1 rounded-full bg-[#242424] hover:bg-[#383838] text-[11px] font-medium text-[#b4b4b4] hover:text-white border border-[#383838] transition-colors flex items-center gap-1 cursor-pointer"
+                  className={`px-2.5 py-1 rounded-full bg-[#242424] hover:bg-[#383838] text-[11px] font-medium text-[#b4b4b4] hover:text-white border border-[#383838] transition-colors flex items-center gap-1 cursor-pointer`}
+                  title={`${activeModeObj.name}: ${activeModeObj.summary}`}
                 >
-                  {chatMode === 'resource-grounded' && (
-                    <Shield className="w-3 h-3 text-emerald-400" />
-                  )}
-                  {chatMode === 'general' && <Globe className="w-3 h-3 text-blue-400" />}
-                  {chatMode === 'hybrid' && <Shuffle className="w-3 h-3 text-purple-400" />}
-                  {chatMode === 'research' && <Microscope className="w-3 h-3 text-amber-400" />}
-                  <span className="capitalize">{chatMode.replace('-', ' ')}</span>
+                  <activeModeObj.icon className={`w-3 h-3 ${activeModeObj.color}`} />
+                  <span>{activeModeObj.name}</span>
+                </button>
+
+                {/* Manual SearXNG Web Search Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setWebSearchEnabled((prev) => !prev)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all cursor-pointer ${
+                    webSearchEnabled
+                      ? 'bg-blue-600/30 border-blue-500/70 text-blue-300 shadow-sm'
+                      : 'bg-[#242424] border-[#383838] text-[#8e8e8e] hover:text-[#ececec]'
+                  }`}
+                  title={
+                    webSearchEnabled
+                      ? 'Web Search is ON (SearXNG). Click to disable.'
+                      : 'Web Search is OFF. Click to search live web via SearXNG.'
+                  }
+                >
+                  <Globe className={`w-3 h-3 ${webSearchEnabled ? 'text-blue-400' : 'text-[#8e8e8e]'}`} />
+                  <span>Web Search</span>
+                  {webSearchEnabled && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 ml-0.5" />}
                 </button>
               </div>
 
@@ -697,6 +880,117 @@ export const ChatPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Mode Discoverability Help Modal */}
+      {modeHelpOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#242424] border border-[#383838] rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#333] pb-3">
+              <h3 className="font-semibold text-white text-sm flex items-center gap-2">
+                <Info className="w-4 h-4 text-rose-400" />
+                Understanding Ruby Chat Modes
+              </h3>
+              <button
+                onClick={() => setModeHelpOpen(false)}
+                className="p-1 rounded-lg text-[#8e8e8e] hover:text-white hover:bg-[#333]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {CHAT_MODES.map((m) => {
+                const Icon = m.icon;
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => {
+                      setChatMode(m.id);
+                      setModeHelpOpen(false);
+                    }}
+                    className={`p-3.5 rounded-xl border ${m.borderColor} bg-[#1a1a1a] hover:bg-[#262626] cursor-pointer transition-all space-y-1`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Icon className={`w-4 h-4 ${m.color}`} />
+                        <span className="font-semibold text-sm text-white">{m.name} Mode</span>
+                      </div>
+                      {chatMode === m.id && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/70 text-emerald-400 border border-emerald-800">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[#ececec]">{m.summary}</p>
+                    <p className="text-[11px] text-[#8e8e8e] italic">Best when: {m.whenToUse}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comprehensive System & Features Getting Started Guide Modal */}
+      {helpGuideOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#242424] border border-[#383838] rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-[#333] pb-3 sticky top-0 bg-[#242424] z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-rose-600/20 border border-rose-500/30 flex items-center justify-center text-rose-400 font-bold text-sm">
+                  R
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white text-base">Ruby Academic Copilot Guide</h3>
+                  <p className="text-[11px] text-[#8e8e8e]">Architecture, features, and tools handbook</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setHelpGuideOpen(false)}
+                className="p-1 rounded-lg text-[#8e8e8e] hover:text-white hover:bg-[#333]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-[#d1d5db] leading-relaxed">
+              <div className="p-3.5 rounded-xl bg-[#1a1a1a] border border-[#333] space-y-1">
+                <h4 className="font-semibold text-white text-sm">What is Ruby?</h4>
+                <p>
+                  Ruby is a personal, local-first academic intelligence copilot. It runs on your own machine without sending your private research, notes, or credentials to third-party clouds unless you explicitly configure an external provider.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#1a1a1a] border border-[#333] space-y-2">
+                <h4 className="font-semibold text-white text-sm">Document-Based Retrieval (RAG)</h4>
+                <p>
+                  Upload your textbooks, PDFs, PPTX lecture slides, DOCX notes, or spreadsheets in the <strong>Library</strong>. Ruby chunks, embeds, and indexes them using a local vector store and BM25 full-text search.
+                </p>
+                <p>
+                  In <strong>Grounded Mode</strong>, answers quote verbatim sources and supply clickable citations with exact page numbers.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#1a1a1a] border border-[#333] space-y-2">
+                <h4 className="font-semibold text-white text-sm">SearXNG Live Web Search</h4>
+                <p>
+                  When you need real-time data from the internet, toggle the <strong>Web Search</strong> button in the chat input. Ruby queries your SearXNG instance and integrates live web results, citing URLs with clickable source badges.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#1a1a1a] border border-[#333] space-y-2">
+                <h4 className="font-semibold text-white text-sm">Academic Simulators & Math Engine</h4>
+                <ul className="list-disc list-inside space-y-1 text-[#b4b4b4]">
+                  <li><strong>SymPy Math Engine:</strong> Solves algebraic equations, derivatives, integrals, and matrix operations.</li>
+                  <li><strong>Restricted Code Sandbox:</strong> Executes Python and traces algorithm steps safely with AST reflection blocking.</li>
+                  <li><strong>OS & Network Simulators:</strong> Simulates CPU scheduling, Banker's deadlock avoidance, FIFO/LRU page replacement, IPv4 subnets, and logic gates.</li>
+                  <li><strong>FSRS Spaced Repetition:</strong> Generates and schedules memory flashcards using the Free Spaced Repetition Schedule (FSRS v4).</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Citation Inspector Modal */}
       {selectedCitationChunk && (

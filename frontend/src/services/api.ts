@@ -442,9 +442,13 @@ export function streamChat(
     subject_id?: string;
     document_ids?: string[];
     provider_id?: string;
+    web_search?: boolean;
   },
   callbacks: {
     onSources?: (chunks: any[]) => void;
+    onWebSearchStart?: (query: string) => void;
+    onWebSources?: (sources: any[]) => void;
+    onWebSearchError?: (error: string) => void;
     onToken?: (token: string) => void;
     onDone?: (data: any) => void;
     onError?: (error: string) => void;
@@ -489,12 +493,18 @@ export function streamChat(
               const parsed = JSON.parse(rawData);
               if (currentEvent === 'sources' && callbacks.onSources) {
                 callbacks.onSources(parsed.chunks || []);
+              } else if (currentEvent === 'web_search_start' && callbacks.onWebSearchStart) {
+                callbacks.onWebSearchStart(parsed.query || '');
+              } else if (currentEvent === 'web_sources' && callbacks.onWebSources) {
+                callbacks.onWebSources(parsed.sources || []);
+              } else if (currentEvent === 'web_search_error' && callbacks.onWebSearchError) {
+                callbacks.onWebSearchError(parsed.error || 'Web search warning');
               } else if (currentEvent === 'token' && callbacks.onToken) {
                 callbacks.onToken(parsed.content || '');
               } else if (currentEvent === 'done' && callbacks.onDone) {
                 callbacks.onDone(parsed);
               } else if (currentEvent === 'error' && callbacks.onError) {
-                callbacks.onError(parsed.error || 'Stream error');
+                callbacks.onError(parsed.error || parsed.message || 'Stream error');
               }
             } catch {
               // Non-JSON SSE line
@@ -510,6 +520,18 @@ export function streamChat(
   })();
 
   return () => controller.abort();
+}
+
+export async function fetchSearxngStatus(): Promise<{
+  configured: boolean;
+  reachable: boolean;
+  message: string;
+  searxng_url?: string;
+  latency_ms?: number;
+}> {
+  const res = await fetch(`${API_BASE}/chat/search/status`);
+  if (!res.ok) throw new Error('Failed to fetch SearXNG status');
+  return res.json();
 }
 
 // Memory API

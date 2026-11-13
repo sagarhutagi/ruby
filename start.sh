@@ -27,10 +27,11 @@ fi
 
 echo "Starting Ruby server on http://127.0.0.1:8000 ..."
 cd "$DIR/backend"
-nohup env PYTHONPATH=. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 >> "$DIR/data/ruby.log" 2>&1 &
+nohup .venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >> "$DIR/data/ruby.log" 2>&1 &
 SERVER_PID=$!
+disown $SERVER_PID
 echo "$SERVER_PID" > "$PID_FILE"
-sleep 1
+sleep 1.5
 
 if ps -p "$SERVER_PID" > /dev/null 2>&1; then
     echo "Ruby started successfully (PID $SERVER_PID)."

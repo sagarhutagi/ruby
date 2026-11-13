@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # Security & Encryption
     encryption_key: Optional[str] = Field(default=None, alias="RUBY_ENCRYPTION_KEY")
 
+    # Web Search (SearXNG)
+    searxng_url: Optional[str] = Field(default=None, alias="SEARXNG_URL")
+    searxng_timeout: int = Field(default=10, alias="SEARXNG_TIMEOUT")
+
     # External AI Providers
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", alias="OLLAMA_BASE_URL")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
