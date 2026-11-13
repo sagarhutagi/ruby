@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Sparkles,
@@ -141,6 +141,8 @@ export const ChatPage: React.FC = () => {
   const [streamingText, setStreamingText] = useState('');
   const [streamingSources, setStreamingSources] = useState<any[]>([]);
   const [streamingWebSources, setStreamingWebSources] = useState<any[]>([]);
+  const [streamingMemories, setStreamingMemories] = useState<any[]>([]);
+  const [streamingMemorySaved, setStreamingMemorySaved] = useState<any | null>(null);
   const [streamingSteps, setStreamingSteps] = useState<any[]>([]);
   const [streamingThinking, setStreamingThinking] = useState<string>('');
   const [isLiveThinkingExpanded, setIsLiveThinkingExpanded] = useState<boolean>(true);
@@ -247,6 +249,8 @@ export const ChatPage: React.FC = () => {
     setStreamingText('');
     setStreamingSources([]);
     setStreamingWebSources([]);
+    setStreamingMemories([]);
+    setStreamingMemorySaved(null);
     setStreamingSteps([]);
     setStreamingThinking('');
     setIsLiveThinkingExpanded(true);
@@ -276,6 +280,12 @@ export const ChatPage: React.FC = () => {
         onWebSearchError: () => {
           setIsSearchingWeb(false);
         },
+        onMemories: (mems) => {
+          setStreamingMemories(mems);
+        },
+        onMemorySaved: (mem) => {
+          setStreamingMemorySaved(mem);
+        },
         onStep: (step) => {
           setStreamingSteps((prev) => {
             const idx = prev.findIndex((s) => s.id === step.id);
@@ -298,6 +308,8 @@ export const ChatPage: React.FC = () => {
           setStreamingText('');
           setStreamingSources([]);
           setStreamingWebSources([]);
+          setStreamingMemories([]);
+          setStreamingMemorySaved(null);
           setStreamingSteps([]);
           setStreamingThinking('');
           setIsSearchingWeb(false);
@@ -492,6 +504,16 @@ export const ChatPage: React.FC = () => {
             <HelpCircle className="w-4 h-4 text-rose-400" />
             <span className="hidden md:inline text-xs font-medium">Guide</span>
           </button>
+
+          {/* Memory Manager Link */}
+          <Link
+            to="/memory"
+            className="p-1.5 text-[#b4b4b4] hover:text-purple-300 rounded-lg hover:bg-[#2f2f2f] transition-colors flex items-center gap-1 text-xs"
+            title="Memory Manager - View and govern persistent long-term memories"
+          >
+            <Brain className="w-4 h-4 text-purple-400" />
+            <span className="hidden lg:inline text-xs font-medium">Memories</span>
+          </Link>
 
           {/* Export Chat */}
           {currentConv && (
@@ -730,6 +752,16 @@ export const ChatPage: React.FC = () => {
                             {msg.diagnostics.web_sources_count !== undefined && (
                               <div>Live Web Sources: {msg.diagnostics.web_sources_count}</div>
                             )}
+                            {msg.diagnostics.recalled_memories_count !== undefined && (
+                              <div className="text-purple-300">
+                                Recalled Long-Term Memories: {msg.diagnostics.recalled_memories_count}
+                              </div>
+                            )}
+                            {msg.diagnostics.newly_formed_memories_count !== undefined && msg.diagnostics.newly_formed_memories_count > 0 && (
+                              <div className="text-purple-400 font-semibold">
+                                Stored New Memories: {msg.diagnostics.newly_formed_memories_count}
+                              </div>
+                            )}
                             {msg.diagnostics.grounding && (
                               <div>
                                 Grounding Verification:{' '}
@@ -817,6 +849,11 @@ export const ChatPage: React.FC = () => {
                       ({streamingWebSources.length} web sources)
                     </span>
                   )}
+                  {streamingMemories.length > 0 && (
+                    <span className="text-[11px] font-mono text-purple-400">
+                      ({streamingMemories.length} memories)
+                    </span>
+                  )}
                 </div>
 
                 {/* Claude-style Live Activity Stepper & Thinking Box */}
@@ -894,6 +931,14 @@ export const ChatPage: React.FC = () => {
                             <div className="flex items-center gap-2 text-xs text-blue-400 bg-blue-950/40 border border-blue-800/60 p-2.5 rounded-xl animate-pulse">
                               <Globe className="w-4 h-4 animate-spin shrink-0 text-blue-400" />
                               <span>Querying SearXNG live web index for: &quot;{webSearchQuery}&quot;...</span>
+                            </div>
+                          )}
+
+                          {/* Live Memory Saved Notification */}
+                          {streamingMemorySaved && (
+                            <div className="flex items-center gap-2 text-xs text-purple-300 bg-purple-950/40 border border-purple-800/60 p-2.5 rounded-xl">
+                              <Brain className="w-4 h-4 shrink-0 text-purple-400" />
+                              <span>Stored in Long-Term Memory: <strong>{streamingMemorySaved.content}</strong></span>
                             </div>
                           )}
 

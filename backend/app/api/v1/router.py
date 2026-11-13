@@ -7,7 +7,7 @@ from app.api.v1.collections import router as collections_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.retrieval import router as retrieval_router
 from app.api.v1.chat import router as chat_router
-from app.api.v1.memories import router as memories_router
+from app.api.v1.memories import router as memories_router, memory_alias_router
 from app.api.v1.academic import router as academic_router
 from app.api.v1.graph import router as graph_router
 from app.api.v1.analytics import router as analytics_router
@@ -22,6 +22,7 @@ api_v1_router.include_router(documents_router)
 api_v1_router.include_router(retrieval_router)
 api_v1_router.include_router(chat_router)
 api_v1_router.include_router(memories_router)
+api_v1_router.include_router(memory_alias_router)
 api_v1_router.include_router(academic_router)
 api_v1_router.include_router(graph_router)
 api_v1_router.include_router(analytics_router)

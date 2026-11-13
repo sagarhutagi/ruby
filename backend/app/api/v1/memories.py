@@ -9,6 +9,7 @@ from app.services.memory.service import memory_service
 logger = logging.getLogger("ruby.api.memories")
 
 router = APIRouter(prefix="/memories", tags=["memories"])
+memory_alias_router = APIRouter(prefix="/memory", tags=["memories"])
 
 
 class MemoryCreateRequest(BaseModel):
@@ -154,6 +155,7 @@ async def search_memories(
 
 
 @router.post("/extract-candidates", summary="Extract Memory Candidates from Text")
+@router.post("/candidates", summary="Extract Memory Candidates from Text (Alias)")
 async def extract_candidates(
     req: CandidateExtractionRequest,
     db: AsyncSession = Depends(get_db),
@@ -219,3 +221,9 @@ async def toggle_pin(
         return _to_memory_response(mem)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@memory_alias_router.get("", include_in_schema=False)
+async def list_memories_alias(db: AsyncSession = Depends(get_db)):
+    mems = await memory_service.list_memories(session=db, status="active")
+    return [_to_memory_response(m) for m in mems]

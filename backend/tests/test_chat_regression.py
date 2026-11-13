@@ -378,3 +378,96 @@ async def test_chat_web_search_mode_and_step_tracing():
         # Clean up test conversation & messages
         await session.delete(conv)
         await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_chat_long_term_memory_formation_and_recall():
+    """
+    Regression test for Long-Term Memory:
+    1. Teaching Ruby a profile memory via chat ('Please remember that my name is Mars...')
+       must trigger candidate extraction, save to SQLite/Chroma, and emit memory_saved event.
+    2. Subsequent turns must automatically recall active/pinned memories into the prompt context.
+    """
+    from app.services.memory.service import memory_service
+    from app.models.entities import Memory
+
+    async with async_session_factory() as session:
+        conv = Conversation(title="Memory Regression Test")
+        session.add(conv)
+        await session.commit()
+        await session.refresh(conv)
+
+        created_mem_id = None
+        try:
+            # Turn 1: Explicit Remember instruction
+            async def mock_turn1_stream(*args, **kwargs):
+                yield ChatResponseChunk(content_delta="Understood! I have saved this to memory.", is_done=True)
+
+            mock_adapter = AsyncMock()
+            mock_adapter.provider_type = "mock"
+            mock_adapter.name = "mock"
+            mock_adapter.default_model = "mock-model"
+            mock_adapter.stream_chat = mock_turn1_stream
+
+            with patch("app.services.ai.manager.provider_manager.get_active_adapter", return_value=mock_adapter):
+                events = []
+                async for evt in chat_engine.stream_chat(
+                    session=session,
+                    conversation_id=conv.id,
+                    user_content="Please remember that my name is Mars and my favorite programming language is Rust.",
+                    mode="general",
+                ):
+                    events.append(evt)
+
+                # Verify memory_saved event
+                save_evt = next((e for e in events if e.get("type") == "memory_saved"), None)
+                assert save_evt is not None
+                created_mem_id = save_evt["memory"]["id"]
+                assert "Mars" in save_evt["memory"]["content"]
+
+                # Verify memory step
+                step_evts = [e["step"] for e in events if e.get("type") == "step"]
+                mem_step = [s for s in step_evts if s["id"] == "memory"][-1]
+                assert mem_step is not None
+                assert mem_step["status"] == "completed"
+
+            # Verify memory was persisted to DB
+            mem_db = await session.scalar(select(Memory).where(Memory.id == created_mem_id))
+            assert mem_db is not None
+            assert mem_db.memory_type == "profile"
+
+            # Turn 2: Verify recall in subsequent prompt
+            captured_messages = []
+
+            async def mock_turn2_stream(messages, *args, **kwargs):
+                captured_messages.extend(messages)
+                yield ChatResponseChunk(content_delta="Your name is Mars and you love Rust.", is_done=True)
+
+            mock_adapter.stream_chat = mock_turn2_stream
+
+            with patch("app.services.ai.manager.provider_manager.get_active_adapter", return_value=mock_adapter):
+                turn2_events = []
+                async for evt in chat_engine.stream_chat(
+                    session=session,
+                    conversation_id=conv.id,
+                    user_content="What is my name?",
+                    mode="general",
+                ):
+                    turn2_events.append(evt)
+
+                # Verify memories event emitted
+                memories_evt = next((e for e in turn2_events if e.get("type") == "memories"), None)
+                assert memories_evt is not None
+                assert any("Mars" in m["content"] for m in memories_evt["memories"])
+
+                # Verify prompt received by LLM contains the recalled memory block
+                user_prompt = captured_messages[-1].content
+                assert "=== RECALLED MEMORIES (Long-term User Memory) ===" in user_prompt
+                assert "Mars" in user_prompt
+
+        finally:
+            # Clean up test memory and conversation
+            if created_mem_id:
+                await memory_service.delete_memory(session=session, memory_id=created_mem_id)
+            await session.delete(conv)
+            await session.commit()

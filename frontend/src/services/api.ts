@@ -451,6 +451,8 @@ export function streamChat(
     onWebSearchError?: (error: string) => void;
     onStep?: (step: any) => void;
     onThinkToken?: (token: string) => void;
+    onMemories?: (memories: any[]) => void;
+    onMemorySaved?: (memory: any) => void;
     onToken?: (token: string) => void;
     onDone?: (data: any) => void;
     onError?: (error: string) => void;
@@ -503,6 +505,10 @@ export function streamChat(
                 callbacks.onWebSearchError(parsed.error || 'Web search warning');
               } else if (currentEvent === 'step' && callbacks.onStep) {
                 callbacks.onStep(parsed.step);
+              } else if (currentEvent === 'memories' && callbacks.onMemories) {
+                callbacks.onMemories(parsed.memories || []);
+              } else if (currentEvent === 'memory_saved' && callbacks.onMemorySaved) {
+                callbacks.onMemorySaved(parsed.memory);
               } else if (currentEvent === 'think_token' && callbacks.onThinkToken) {
                 callbacks.onThinkToken(parsed.content || '');
               } else if (currentEvent === 'token' && callbacks.onToken) {

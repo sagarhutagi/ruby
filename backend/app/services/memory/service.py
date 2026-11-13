@@ -304,6 +304,51 @@ class MemoryService:
         output.sort(key=lambda x: x["similarity"], reverse=True)
         return output
 
+    async def get_context_memories(
+        self,
+        session: AsyncSession,
+        query: str,
+        top_k: int = 4,
+    ) -> List[Memory]:
+        """
+        Retrieves authoritative memory context for conversation turns:
+        1. All pinned active memories (user profile priorities).
+        2. All active user profile and procedural preference memories.
+        3. Semantically matching memories relevant to the query.
+        Returns deduplicated memories ranked by pinned status and importance.
+        """
+        seen: Dict[str, Memory] = {}
+
+        # 1. Pinned memories
+        pinned_mems = await self.list_memories(session, status="active", is_pinned=True)
+        for m in pinned_mems:
+            seen[m.id] = m
+
+        # 2. Profile and procedural preference memories (active)
+        pref_mems = await self.list_memories(session, status="active", memory_type="profile")
+        for m in pref_mems:
+            seen[m.id] = m
+
+        procedural_mems = await self.list_memories(session, status="active", memory_type="procedural")
+        for m in procedural_mems:
+            seen[m.id] = m
+
+        # 3. Semantic search for query-relevant memories
+        clean_q = query.strip()
+        if clean_q:
+            semantic_matches = await self.search_memories(session, query=clean_q, top_k=top_k)
+            for sm in semantic_matches:
+                if sm["similarity"] >= 0.45:
+                    mem = sm["memory"]
+                    seen[mem.id] = mem
+
+        # Sort pinned first, then by importance descending, then updated_at descending
+        return sorted(
+            seen.values(),
+            key=lambda x: (x.is_pinned, x.importance_score, x.updated_at),
+            reverse=True,
+        )
+
     async def extract_candidates(
         self,
         session: AsyncSession,
@@ -312,39 +357,100 @@ class MemoryService:
     ) -> List[Dict[str, Any]]:
         """
         Analyses user text for memory extraction candidates:
-        - Preferences ("I prefer LaTeX", "I want step-by-step explanations") -> Profile
+        - Explicit Remember commands ("Please remember that...", "Keep in mind that...")
+        - Preferences / Profile ("I prefer LaTeX", "My name is Mars", "My favorite language is Rust") -> Profile
         - Mistakes / Difficulties ("I don't understand paging", "I got confused on Dijkstra") -> Episodic
         - Facts / Definitions ("The formula for Bayes theorem is...") -> Semantic
         - Repeated instructions ("Always show Big-O complexity") -> Procedural
         Computes importance score, checks duplicates, and checks contradictions.
         """
-        candidates: List[Dict[str, Any]] = []
-        lines = [line.strip() for line in text.split("\n") if len(line.strip()) > 10]
+        import re
 
-        profile_triggers = ["i prefer", "i like", "my goal is", "i am studying", "i want explanations in"]
-        episodic_triggers = ["i struggled with", "i was confused by", "i made a mistake", "i keep forgetting", "i don't understand"]
-        procedural_triggers = ["always show", "always format", "preferred workflow", "never include"]
-        semantic_triggers = ["is defined as", "formula for", "the theorem states", "key property of"]
+        candidates: List[Dict[str, Any]] = []
+
+        # Split text into candidate statements (by line and sentence boundaries)
+        raw_statements: List[str] = []
+        for block in text.split("\n"):
+            block_clean = block.strip()
+            if not block_clean:
+                continue
+            # If the block contains multiple punctuated sentences, check each sentence
+            sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", block_clean) if len(s.strip()) > 8]
+            if len(sentences) > 1:
+                raw_statements.extend(sentences)
+            else:
+                raw_statements.append(block_clean)
+
+        profile_triggers = [
+            "i prefer", "i like", "i dislike", "i hate", "my goal is", "i am studying",
+            "i am preparing for", "i want explanations in", "my name is", "call me",
+            "my favorite", "my background is", "my major is", "my field is", "i live in",
+            "i am an", "i am a", "as a student", "as an engineer"
+        ]
+        episodic_triggers = [
+            "i struggled with", "i was confused by", "i made a mistake", "i keep forgetting",
+            "i don't understand", "i failed to", "my weak area is", "i had difficulty with"
+        ]
+        procedural_triggers = [
+            "always show", "always format", "preferred workflow", "never include",
+            "always use", "never use", "do not use", "don't ever", "always include",
+            "strictly follow", "respond in"
+        ]
+        semantic_triggers = [
+            "is defined as", "formula for", "the theorem states", "key property of",
+            "algorithm operates on", "complexity is"
+        ]
+
+        remember_pat = re.compile(
+            r"^(?:please\s+)?(?:remember|keep in mind|note|don't forget)(?:\s+that)?:?\s*(.*)$",
+            re.IGNORECASE,
+        )
 
         existing_mems = await self.list_memories(session, status="active")
 
-        for line in lines:
-            lower = line.lower()
+        for statement in raw_statements:
+            statement_clean = statement.strip()
+            if len(statement_clean) < 8:
+                continue
+
+            # Skip questions: user queries asking for information should not be formed into memories
+            if statement_clean.endswith("?") or re.match(
+                r"^(?:what|who|where|when|why|how|can you|could you|do you|tell me|is there|are there)\b",
+                statement_clean,
+                re.IGNORECASE,
+            ):
+                continue
+
+            lower = statement_clean.lower()
             m_type = None
             imp = 0.5
+            is_explicit_remember = False
+
+            # Check explicit remember directive
+            rem_match = remember_pat.match(statement_clean)
+            extracted_statement = statement_clean
+            if rem_match and rem_match.group(1).strip():
+                extracted_statement = rem_match.group(1).strip()
+                extracted_statement = extracted_statement[0].upper() + extracted_statement[1:]
+                lower = extracted_statement.lower()
+                is_explicit_remember = True
+                imp = 0.9
 
             if any(t in lower for t in profile_triggers):
                 m_type = "profile"
-                imp = 0.8
+                imp = max(imp, 0.85 if is_explicit_remember else 0.8)
             elif any(t in lower for t in episodic_triggers):
                 m_type = "episodic"
-                imp = 0.7
+                imp = max(imp, 0.7)
             elif any(t in lower for t in procedural_triggers):
                 m_type = "procedural"
-                imp = 0.85
+                imp = max(imp, 0.85)
             elif any(t in lower for t in semantic_triggers):
                 m_type = "semantic"
-                imp = 0.65
+                imp = max(imp, 0.65)
+            elif is_explicit_remember:
+                m_type = "profile"
+                imp = 0.85
 
             if m_type:
                 # Duplicate check
@@ -366,14 +472,16 @@ class MemoryService:
                                 break
 
                 candidates.append({
-                    "content": line,
+                    "content": statement_clean,
+                    "normalized_content": extracted_statement,
                     "memory_type": m_type,
                     "importance_score": imp,
-                    "confidence": 0.9,
+                    "confidence": 0.95 if is_explicit_remember else 0.9,
                     "is_duplicate": is_duplicate,
                     "duplicate_memory_id": matched_id,
                     "is_contradiction": is_contradiction,
                     "source_conversation_id": conversation_id,
+                    "is_explicit": is_explicit_remember,
                 })
 
         return candidates

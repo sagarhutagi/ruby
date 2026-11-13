@@ -3,12 +3,13 @@ import logging
 from typing import AsyncGenerator, Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models.entities import Conversation, Message
+from app.models.entities import Conversation, Message, Memory
 from app.services.retrieval.hybrid import hybrid_retriever, RetrievedChunk
 from app.services.retrieval.provenance import context_assembler, citation_validator
 from app.services.ai.manager import provider_manager
 from app.services.ai.base import ChatMessage
 from app.services.search.searxng import searxng_client
+from app.services.memory.service import memory_service
 
 logger = logging.getLogger("ruby.chat.engine")
 
@@ -139,6 +140,7 @@ class ChatEngine:
         mode: str,
         conversation_prompt: Optional[str] = None,
         has_web_sources: bool = False,
+        has_memories: bool = False,
     ) -> str:
         base_instruction = (
             "You are RUBY, a rigorous, local-first personal academic intelligence assistant.\n"
@@ -194,13 +196,23 @@ class ChatEngine:
                 "- Never fabricate URLs or citations."
             )
 
+        memory_instruction = ""
+        if has_memories:
+            memory_instruction = (
+                "\n\nPERSISTENT LONG-TERM MEMORY:\n"
+                "- Verified user profile attributes, background facts, and study preferences are provided in the RECALLED MEMORIES context block.\n"
+                "- Naturally adopt and honor the user's stored preferences (e.g. style, notation, language).\n"
+                "- When the user asks what you know or remember about them, answer accurately using the recalled memories.\n"
+                "- If the user asks you to remember something new, confirm that you have stored it in your long-term memory."
+            )
+
         thinking_instruction = (
             "\n\nREASONING & CHAIN-OF-THOUGHT:\n"
             "- If you reason through complex steps, calculations, or source comparisons before answering, you may enclose your preliminary reasoning inside <think>...</think> tags."
         )
 
         custom = f"\nCustom Instructions:\n{conversation_prompt}\n" if conversation_prompt else ""
-        return f"{base_instruction}\n\n{mode_instruction}{web_instruction}{thinking_instruction}{custom}"
+        return f"{base_instruction}\n\n{mode_instruction}{web_instruction}{memory_instruction}{thinking_instruction}{custom}"
 
     async def stream_chat(
         self,
@@ -269,6 +281,94 @@ class ChatEngine:
                 description="Using general academic knowledge without document retrieval.",
             )
         yield {"type": "step", "step": step_intent}
+
+        # 2.5 Long-Term Memory Step (Candidate Extraction & Recalling)
+        step_mem = step_tracker.update(
+            step_id="memory",
+            label="Recalling Memory",
+            status="running",
+            description="Searching active long-term memories and user preferences...",
+        )
+        yield {"type": "step", "step": step_mem}
+
+        newly_formed_memories: List[Memory] = []
+        try:
+            candidates = await memory_service.extract_candidates(
+                session=session,
+                text=user_content,
+                conversation_id=conversation_id,
+            )
+            for cand in candidates:
+                if not cand.get("is_duplicate"):
+                    stmt_to_save = cand.get("normalized_content") or cand["content"]
+                    new_mem = await memory_service.create_memory(
+                        session=session,
+                        content=stmt_to_save,
+                        memory_type=cand["memory_type"],
+                        importance_score=cand["importance_score"],
+                        confidence=cand["confidence"],
+                        is_pinned=(cand["memory_type"] == "profile" or cand.get("is_explicit", False)),
+                        source_conversation_id=conversation_id,
+                        source_event="chat_auto_extraction",
+                    )
+                    newly_formed_memories.append(new_mem)
+                    yield {
+                        "type": "memory_saved",
+                        "memory": {
+                            "id": new_mem.id,
+                            "content": new_mem.content,
+                            "memory_type": new_mem.memory_type,
+                            "importance_score": new_mem.importance_score,
+                            "is_pinned": new_mem.is_pinned,
+                        },
+                    }
+                    logger.info("Chat auto-formed memory: %s", new_mem.content)
+        except Exception as e:
+            logger.warning("Error during memory candidate extraction: %s", e)
+
+        recalled_memories: List[Memory] = []
+        try:
+            recalled_memories = await memory_service.get_context_memories(
+                session=session,
+                query=user_content,
+                top_k=4,
+            )
+        except Exception as e:
+            logger.warning("Error recalling memories: %s", e)
+
+        if recalled_memories or newly_formed_memories:
+            desc_parts = []
+            if recalled_memories:
+                desc_parts.append(f"Loaded {len(recalled_memories)} active long-term memories.")
+            if newly_formed_memories:
+                desc_parts.append(f"Stored {len(newly_formed_memories)} new memory statement.")
+            step_mem = step_tracker.update(
+                step_id="memory",
+                label="Memory Recalled",
+                status="completed",
+                description=" ".join(desc_parts),
+            )
+            yield {"type": "step", "step": step_mem}
+            yield {
+                "type": "memories",
+                "memories": [
+                    {
+                        "id": m.id,
+                        "content": m.content,
+                        "memory_type": m.memory_type,
+                        "is_pinned": m.is_pinned,
+                    }
+                    for m in recalled_memories
+                ],
+            }
+        else:
+            step_mem = step_tracker.update(
+                step_id="memory",
+                label="Memory Checked",
+                status="completed",
+                description="0 relevant prior memories found.",
+            )
+            yield {"type": "step", "step": step_mem}
 
         # 3. Retrieval Step (if grounded, hybrid, or research)
         retrieved_chunks: List[RetrievedChunk] = []
@@ -421,10 +521,23 @@ class ChatEngine:
             web_lines.append("=========================================")
             web_context_block = "\n".join(web_lines)
 
+        memory_context_block = None
+        if recalled_memories:
+            mem_lines = [
+                "=== RECALLED MEMORIES (Long-term User Memory) ===",
+                "The following are persistent memories, verified user profile facts, and preferences stored in Ruby's long-term memory:",
+            ]
+            for m in recalled_memories:
+                pinned_badge = " [Pinned]" if m.is_pinned else ""
+                mem_lines.append(f"- [{m.memory_type.upper()}{pinned_badge}] {m.content}")
+            mem_lines.append("=================================================")
+            memory_context_block = "\n".join(mem_lines)
+
         system_prompt = self._build_system_prompt(
             mode=mode,
             conversation_prompt=conv.system_prompt,
             has_web_sources=bool(web_search_sources),
+            has_memories=bool(recalled_memories),
         )
 
         # 6. Fetch previous conversation history (last 10 messages for context)
@@ -443,6 +556,8 @@ class ChatEngine:
 
         # Build final user prompt with context blocks
         prompt_parts: List[str] = []
+        if memory_context_block:
+            prompt_parts.append(memory_context_block)
         if context_block and mode in ("resource-grounded", "hybrid", "research"):
             prompt_parts.append(context_block)
         if web_context_block:
@@ -635,6 +750,16 @@ class ChatEngine:
             "grounding": validation_report.model_dump(),
             "web_sources_count": len(web_search_sources),
             "web_sources": web_search_sources,
+            "recalled_memories_count": len(recalled_memories),
+            "recalled_memories": [
+                {"id": m.id, "content": m.content, "memory_type": m.memory_type}
+                for m in recalled_memories
+            ],
+            "newly_formed_memories_count": len(newly_formed_memories),
+            "newly_formed_memories": [
+                {"id": m.id, "content": m.content, "memory_type": m.memory_type}
+                for m in newly_formed_memories
+            ],
             "steps": step_tracker.steps,
             "thinking_content": thinking_content,
         }
@@ -661,6 +786,14 @@ class ChatEngine:
             "full_content": full_response,
             "citations": [c.model_dump() for c in validation_report.citations],
             "web_sources": web_search_sources,
+            "recalled_memories": [
+                {"id": m.id, "content": m.content, "memory_type": m.memory_type}
+                for m in recalled_memories
+            ],
+            "newly_formed_memories": [
+                {"id": m.id, "content": m.content, "memory_type": m.memory_type}
+                for m in newly_formed_memories
+            ],
             "steps": step_tracker.steps,
             "thinking_content": thinking_content,
             "diagnostics": diagnostics,
