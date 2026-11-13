@@ -82,25 +82,25 @@ class AGYAdapter(BaseAIProvider):
             }
 
         version = await self.get_version()
-        quotas = await self.get_quota_summary()
         latency = round((time.perf_counter() - start) * 1000, 2)
 
-        if quotas.get("success"):
+        if version:
             return {
                 "success": True,
                 "latency_ms": latency,
-                "version": version or "unknown",
-                "message": f"Connected to AGY CLI v{version or 'installed'}",
+                "version": version,
+                "message": f"Connected to AGY CLI v{version}",
                 "executable_path": self.bin_path,
-                "quota_groups": len(quotas.get("groups", [])),
+                "model_count": 6,
             }
         else:
             return {
                 "success": True,
                 "latency_ms": latency,
-                "version": version or "unknown",
-                "message": f"AGY CLI v{version or 'installed'} detected at {self.bin_path}",
+                "version": "unknown",
+                "message": f"AGY CLI binary detected at {self.bin_path}",
                 "executable_path": self.bin_path,
+                "model_count": 6,
             }
 
     async def list_models(self) -> List[ModelInfo]:
@@ -333,7 +333,7 @@ class AGYAdapter(BaseAIProvider):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=25.0)
 
             if proc.returncode != 0:
                 return {
