@@ -12,7 +12,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, onC
   const parts = content.split(/(```[\s\S]*?```)/g);
 
   return (
-    <div className="space-y-3 text-xs leading-relaxed text-zinc-200">
+    <div className="space-y-4 text-[15px] leading-7 text-[#ececec] font-sans">
       {parts.map((part, idx) => {
         if (part.startsWith('```') && part.endsWith('```')) {
           return <CodeBlock key={idx} codeBlock={part} />;
@@ -38,27 +38,27 @@ const CodeBlock: React.FC<{ codeBlock: string }> = ({ codeBlock }) => {
   };
 
   return (
-    <div className="rounded-lg bg-zinc-950 border border-zinc-800 overflow-hidden my-2">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-800 text-[11px] font-mono text-zinc-400">
-        <span>{lang}</span>
+    <div className="rounded-xl bg-[#0d0d0d] border border-[#2f2f2f] overflow-hidden my-3 shadow-md">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#1e1e1e] border-b border-[#2f2f2f] text-xs font-mono text-[#b4b4b4]">
+        <span className="font-medium lowercase">{lang}</span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-[#b4b4b4] hover:text-white transition-colors cursor-pointer py-0.5 px-2 rounded hover:bg-[#2f2f2f]"
         >
           {copied ? (
             <>
-              <Check className="w-3 h-3 text-emerald-400" />
-              <span className="text-emerald-400">Copied</span>
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-emerald-400 font-sans">Copied!</span>
             </>
           ) : (
             <>
-              <Copy className="w-3 h-3" />
-              <span>Copy</span>
+              <Copy className="w-3.5 h-3.5" />
+              <span className="font-sans">Copy code</span>
             </>
           )}
         </button>
       </div>
-      <pre className="p-3 font-mono text-[11px] overflow-x-auto text-zinc-300 leading-normal">
+      <pre className="p-4 font-mono text-[13px] overflow-x-auto text-[#f1f1f1] leading-relaxed">
         <code>{code}</code>
       </pre>
     </div>
@@ -118,48 +118,48 @@ const TextBlock: React.FC<{ text: string; onCitationClick?: (tag: string) => voi
     // Headings
     if (trimmed.startsWith('### ')) {
       elements.push(
-        <h4 key={i} className="text-xs font-semibold text-zinc-100 mt-3 mb-1">
+        <h4 key={i} className="text-base font-semibold text-[#f4f4f5] mt-4 mb-1">
           {renderInline(trimmed.slice(4), onCitationClick)}
         </h4>
       );
     } else if (trimmed.startsWith('## ')) {
       elements.push(
-        <h3 key={i} className="text-sm font-semibold text-zinc-100 mt-4 mb-1.5 border-b border-zinc-800 pb-1">
+        <h3 key={i} className="text-lg font-semibold text-[#f4f4f5] mt-5 mb-2 border-b border-[#333] pb-1">
           {renderInline(trimmed.slice(3), onCitationClick)}
         </h3>
       );
     } else if (trimmed.startsWith('# ')) {
       elements.push(
-        <h2 key={i} className="text-base font-bold text-zinc-100 mt-4 mb-2">
+        <h2 key={i} className="text-xl font-bold text-white mt-6 mb-2.5">
           {renderInline(trimmed.slice(2), onCitationClick)}
         </h2>
       );
     } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
       elements.push(
-        <li key={i} className="ml-4 list-disc text-zinc-300 my-0.5">
+        <li key={i} className="ml-5 list-disc text-[#d1d5db] my-1 marker:text-[#888]">
           {renderInline(trimmed.slice(2), onCitationClick)}
         </li>
       );
     } else if (/^\d+\.\s+/.test(trimmed)) {
       const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
       elements.push(
-        <li key={i} className="ml-4 list-decimal text-zinc-300 my-0.5">
+        <li key={i} className="ml-5 list-decimal text-[#d1d5db] my-1 marker:text-[#888]">
           {renderInline(numMatch ? numMatch[2] : trimmed, onCitationClick)}
         </li>
       );
     } else if (trimmed.startsWith('> ')) {
       elements.push(
-        <blockquote key={i} className="border-l-2 border-indigo-500 pl-3 my-2 text-zinc-400 italic">
+        <blockquote key={i} className="border-l-2 border-[#555] pl-3.5 my-2.5 text-[#a1a1aa] italic">
           {renderInline(trimmed.slice(2), onCitationClick)}
         </blockquote>
       );
     } else if (trimmed === '---') {
-      elements.push(<hr key={i} className="border-zinc-800 my-3" />);
+      elements.push(<hr key={i} className="border-[#383838] my-4" />);
     } else if (trimmed === '') {
-      elements.push(<div key={i} className="h-1.5" />);
+      elements.push(<div key={i} className="h-2" />);
     } else {
       elements.push(
-        <p key={i} className="my-1 text-zinc-300 leading-relaxed">
+        <p key={i} className="my-1 text-[#ececec] leading-relaxed">
           {renderInline(line, onCitationClick)}
         </p>
       );
@@ -181,26 +181,25 @@ const MarkdownTable: React.FC<{ rows: string[] }> = ({ rows }) => {
       .map((c) => c.trim());
 
   const headers = parseRow(rows[0]);
-  // skip rows[1] if it's separator |---|---|
   const dataRows = rows.slice(rows[1].includes('---') ? 2 : 1).map(parseRow);
 
   return (
-    <div className="overflow-x-auto my-3 rounded-lg border border-zinc-800">
-      <table className="w-full text-left border-collapse text-[11px]">
+    <div className="overflow-x-auto my-3 rounded-xl border border-[#383838] bg-[#1a1a1a]">
+      <table className="w-full text-left border-collapse text-[13px]">
         <thead>
-          <tr className="bg-zinc-900 border-b border-zinc-800">
+          <tr className="bg-[#242424] border-b border-[#383838]">
             {headers.map((h, i) => (
-              <th key={i} className="p-2 font-semibold text-zinc-200">
+              <th key={i} className="px-3.5 py-2 font-medium text-[#ececec]">
                 {h}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-800/60 bg-zinc-950/40">
+        <tbody className="divide-y divide-[#2d2d2d]">
           {dataRows.map((r, ri) => (
-            <tr key={ri} className="hover:bg-zinc-900/40 transition-colors">
+            <tr key={ri} className="hover:bg-[#222222] transition-colors">
               {r.map((c, ci) => (
-                <td key={ci} className="p-2 text-zinc-300">
+                <td key={ci} className="px-3.5 py-2 text-[#d4d4d8]">
                   {c}
                 </td>
               ))}
@@ -213,11 +212,6 @@ const MarkdownTable: React.FC<{ rows: string[] }> = ({ rows }) => {
 };
 
 function renderInline(text: string, onCitationClick?: (tag: string) => void): React.ReactNode[] {
-  // Regex splitting by:
-  // 1. Inline KaTeX math: $...$
-  // 2. Citation markers: [Doc: ...] or [SOURCE #X]
-  // 3. Bold text: **...**
-  // 4. Inline code: `...`
   const tokenRegex = /(\$[^$\n]+\$|\[(?:Doc|Document):[^\]]+\]|\[SOURCE\s*#?\d+\]|\*\*[^*]+\*\*|`[^`]+`)/g;
   const parts = text.split(tokenRegex);
 
@@ -232,16 +226,16 @@ function renderInline(text: string, onCitationClick?: (tag: string) => void): Re
         return (
           <span
             key={idx}
-            className="inline-block px-1 mx-0.5 rounded bg-zinc-900/60 font-sans"
+            className="inline-block px-1.5 py-0.5 mx-0.5 rounded bg-[#2a2a2a] border border-[#3a3a3a] font-sans"
             dangerouslySetInnerHTML={{ __html: html }}
           />
         );
       } catch {
-        return <code key={idx} className="font-mono text-zinc-400">{part}</code>;
+        return <code key={idx} className="font-mono text-[#a1a1aa]">{part}</code>;
       }
     }
 
-    // Citation badge
+    // Citation badge - styled as sleek pill
     if (
       (part.startsWith('[Doc:') || part.startsWith('[Document:') || part.startsWith('[SOURCE')) &&
       part.endsWith(']')
@@ -250,7 +244,7 @@ function renderInline(text: string, onCitationClick?: (tag: string) => void): Re
         <button
           key={idx}
           onClick={() => onCitationClick && onCitationClick(part)}
-          className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-950/70 border border-indigo-700/60 text-indigo-300 hover:bg-indigo-900 hover:text-indigo-100 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1 mx-1 px-2 py-0.5 rounded-full text-xs font-mono bg-[#2a2b32] border border-[#3e404b] text-[#93c5fd] hover:bg-[#343642] hover:text-white transition-colors cursor-pointer shadow-sm"
           title="Click to inspect source citation"
         >
           <span>{part}</span>
@@ -262,7 +256,7 @@ function renderInline(text: string, onCitationClick?: (tag: string) => void): Re
     // Bold text
     if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
       return (
-        <strong key={idx} className="font-semibold text-zinc-100">
+        <strong key={idx} className="font-semibold text-white">
           {part.slice(2, -2)}
         </strong>
       );
@@ -271,7 +265,7 @@ function renderInline(text: string, onCitationClick?: (tag: string) => void): Re
     // Inline code
     if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
       return (
-        <code key={idx} className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono text-[11px]">
+        <code key={idx} className="px-1.5 py-0.5 rounded bg-[#2a2a2a] text-[#f4f4f5] border border-[#383838] font-mono text-[13px]">
           {part.slice(1, -1)}
         </code>
       );

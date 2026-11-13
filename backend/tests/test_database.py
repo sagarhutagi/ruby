@@ -21,19 +21,19 @@ async def test_seeded_subjects():
 async def test_fts5_indexing_and_search():
     async with async_session_factory() as session:
         # Index sample chunk
-        chunk_id = "test-chunk-123"
-        doc_id = "test-doc-456"
-        content = "Dijkstra algorithm finds the shortest path in a weighted graph."
+        chunk_id = "test-chunk-xylophonic-quasar"
+        doc_id = "test-doc-xylophonic-quasar"
+        content = "XylophonicQuasar algorithm finds the shortest path in a weighted graph."
         await index_chunk_fts(session, chunk_id, doc_id, content)
 
         # Search for keyword
-        results = await search_fts(session, "Dijkstra shortest path", limit=5)
+        results = await search_fts(session, "XylophonicQuasar", limit=5)
         assert len(results) > 0
         assert results[0]["chunk_id"] == chunk_id
         assert results[0]["document_id"] == doc_id
-        assert "Dijkstra" in results[0]["snippet"]
+        assert "XylophonicQuasar" in results[0]["snippet"]
 
         # Clean up
         await delete_document_fts(session, doc_id)
-        results_after = await search_fts(session, "Dijkstra", limit=5)
+        results_after = await search_fts(session, "XylophonicQuasar", limit=5)
         assert len(results_after) == 0
