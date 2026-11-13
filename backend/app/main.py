@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.database.session import init_db, engine, async_session_factory
 from app.database.fts import init_fts
 from app.database.seed import seed_default_subjects
+from app.services.ai.manager import provider_manager
 from app.api.v1.router import api_v1_router
 
 logging.basicConfig(
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     async with async_session_factory() as session:
         await init_fts(session)
         await seed_default_subjects(session)
+        await provider_manager.ensure_default_ollama_provider(session)
 
     logger.info("Ruby backend initialized successfully on %s:%d", settings.host, settings.port)
     yield

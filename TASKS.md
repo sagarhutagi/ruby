@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 1 (Foundation) -> Complete. Beginning Phase 2 (AI Provider Infrastructure)
+- **Current Phase:** Phase 2 (AI Provider Infrastructure) -> Complete. Beginning Phase 3 (Hardware and System Monitoring)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -35,13 +35,14 @@
 - [x] Execute test suite and verify all acceptance criteria for Phase 1.
 
 ### Phase 2: AI Provider Infrastructure
-- [ ] Provider interface and capabilities specification.
-- [ ] Ollama adapter (local model listing, generate, stream).
-- [ ] Cloud provider adapters (OpenAI, Gemini, Anthropic, OpenRouter, Generic OpenAI).
-- [ ] Secret storage with Linux keyring and encrypted fallback.
-- [ ] Provider management endpoints and GUI.
-- [ ] Model routing and fallback policies.
-- [ ] Mocked provider tests and streaming tests.
+- [x] Provider interface and capabilities specification in `app/services/ai/base.py`.
+- [x] Ollama adapter with local model listing, generation, and streaming in `adapters/ollama.py`.
+- [x] Cloud provider adapters (OpenAI, Gemini, Claude, OpenRouter, Generic OpenAI) with SSE streaming.
+- [x] Secret storage with Linux keyring and AES-GCM encrypted fallback in `app/core/secrets_manager.py`.
+- [x] Provider management endpoints and CRUD in `app/api/v1/providers.py`.
+- [x] Model routing and explicit fallback policies in `app/services/ai/manager.py`.
+- [x] Provider manager GUI in `frontend/src/pages/ProvidersPage.tsx`.
+- [x] Mocked adapter and secrets unit tests with 100% pass rate.
 
 ### Phase 3: Hardware & System Monitoring
 - [ ] NVML / nvidia-smi GPU and VRAM detector.

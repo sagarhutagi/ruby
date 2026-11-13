@@ -35,22 +35,22 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 2 --- AI provider infrastructure
-- [ ] Define provider interfaces and capability declarations.
-- [ ] Implement Ollama adapter.
-- [ ] Implement OpenAI adapter.
-- [ ] Implement Gemini adapter.
-- [ ] Implement Anthropic Claude adapter.
-- [ ] Implement OpenRouter adapter.
-- [ ] Implement generic OpenAI-compatible adapter.
-- [ ] Add secure credential storage (Linux keyring + encrypted fallback).
-- [ ] Add provider CRUD APIs (`/api/v1/providers`).
-- [ ] Add provider connection and latency tests.
-- [ ] Add dynamic model discovery where supported.
-- [ ] Add streaming chat interface with token counters.
-- [ ] Add model routing by task (chat, reasoning, embeddings, tutoring).
-- [ ] Add explicit, opt-in fallback rules.
-- [ ] Add provider manager GUI.
-- [ ] Add mocked adapter tests.
+- [x] Define provider interfaces and capability declarations.
+- [x] Implement Ollama adapter.
+- [x] Implement OpenAI adapter.
+- [x] Implement Gemini adapter.
+- [x] Implement Anthropic Claude adapter.
+- [x] Implement OpenRouter adapter.
+- [x] Implement generic OpenAI-compatible adapter.
+- [x] Add secure credential storage (Linux keyring + encrypted fallback).
+- [x] Add provider CRUD APIs (`/api/v1/providers`).
+- [x] Add provider connection and latency tests.
+- [x] Add dynamic model discovery where supported.
+- [x] Add streaming chat interface with token counters.
+- [x] Add model routing by task (chat, reasoning, embeddings, tutoring).
+- [x] Add explicit, opt-in fallback rules.
+- [x] Add provider manager GUI.
+- [x] Add mocked adapter tests.
 
 **Acceptance criteria:** A user can add a provider, securely configure it, test it, select a model and receive a streamed response. Secrets never appear in API responses or logs.
 
