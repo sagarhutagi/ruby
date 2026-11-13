@@ -16,6 +16,12 @@ BANNED_MODULES = {
 
 BANNED_CALLS = {
     "eval", "exec", "open", "__import__", "compile", "globals", "locals",
+    "getattr", "setattr", "delattr", "breakpoint", "memoryview",
+}
+
+BANNED_ATTRIBUTES = {
+    "__subclasses__", "__globals__", "__builtins__", "__class__",
+    "__base__", "__bases__", "__loader__", "__spec__",
 }
 
 
@@ -54,6 +60,14 @@ class CodeSandbox:
                 if isinstance(node.func, ast.Name):
                     if node.func.id in BANNED_CALLS:
                         return f"Security Exception: Builtin '{node.func.id}()' is prohibited in sandbox."
+                elif isinstance(node.func, ast.Attribute):
+                    if node.func.attr in BANNED_ATTRIBUTES:
+                        return f"Security Exception: Method '{node.func.attr}()' is prohibited in sandbox."
+
+            # Check dunder reflection attributes
+            elif isinstance(node, ast.Attribute):
+                if node.attr in BANNED_ATTRIBUTES:
+                    return f"Security Exception: Access to attribute '{node.attr}' is prohibited in sandbox."
 
         return None
 

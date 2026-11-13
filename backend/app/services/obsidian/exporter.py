@@ -11,6 +11,17 @@ from app.models.entities import KnowledgeNode, KnowledgeEdge, Subject
 
 logger = logging.getLogger("ruby.services.obsidian")
 
+RESTRICTED_SYSTEM_PREFIXES = ("/etc", "/boot", "/root", "/sys", "/proc", "/dev", "/usr", "/bin", "/sbin", "/var/run")
+
+
+def validate_safe_export_path(path_str: str) -> str:
+    """Guards against path traversal or targeting protected system directories."""
+    resolved = os.path.abspath(os.path.expanduser(path_str))
+    for restricted in RESTRICTED_SYSTEM_PREFIXES:
+        if resolved == restricted or resolved.startswith(restricted + "/"):
+            raise ValueError(f"Target vault path '{path_str}' is inside a protected system directory and cannot be modified.")
+    return resolved
+
 
 class ObsidianVaultExporter:
     """Exports Knowledge Graph nodes and edges to Obsidian-compatible Markdown vaults with wikilinks."""
@@ -206,7 +217,7 @@ class ObsidianVaultExporter:
         to_create: List[str] = []
         to_overwrite: List[str] = []
 
-        vault_abs = os.path.abspath(vault_path)
+        vault_abs = validate_safe_export_path(vault_path)
 
         for note in notes:
             dest_file = os.path.join(vault_abs, note["relative_path"])
@@ -234,7 +245,7 @@ class ObsidianVaultExporter:
         Write notes to local Obsidian vault filesystem path with overwrite protection.
         """
         notes = await self.generate_vault_notes(session, subject_id)
-        vault_abs = os.path.abspath(vault_path)
+        vault_abs = validate_safe_export_path(vault_path)
         os.makedirs(vault_abs, exist_ok=True)
 
         written: List[str] = []

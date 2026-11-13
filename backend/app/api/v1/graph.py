@@ -177,21 +177,27 @@ async def extract_from_document(document_id: str, db: AsyncSession = Depends(get
 
 @router.post("/obsidian/preview", summary="Preview Obsidian Vault Export and Conflicts")
 async def preview_obsidian_export(req: ObsidianExportRequest, db: AsyncSession = Depends(get_db)):
-    return await obsidian_exporter.preview_export(
-        session=db,
-        vault_path=req.vault_path,
-        subject_id=req.subject_id,
-    )
+    try:
+        return await obsidian_exporter.preview_export(
+            session=db,
+            vault_path=req.vault_path,
+            subject_id=req.subject_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/obsidian/export", summary="Export Knowledge Graph to Obsidian Vault Folder")
 async def export_to_obsidian_vault(req: ObsidianExportRequest, db: AsyncSession = Depends(get_db)):
-    return await obsidian_exporter.export_to_vault(
-        session=db,
-        vault_path=req.vault_path,
-        subject_id=req.subject_id,
-        allow_overwrite=req.allow_overwrite,
-    )
+    try:
+        return await obsidian_exporter.export_to_vault(
+            session=db,
+            vault_path=req.vault_path,
+            subject_id=req.subject_id,
+            allow_overwrite=req.allow_overwrite,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/obsidian/export-zip", summary="Download Knowledge Graph as Obsidian Vault ZIP Archive")

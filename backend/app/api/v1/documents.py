@@ -12,6 +12,9 @@ from app.models.entities import Document, DocumentChunk, IngestionJob
 from app.database.fts import delete_document_fts
 from app.services.retrieval.chroma_store import chroma_store
 from app.workers.ingestion import process_ingestion_job
+from app.services.documents.registry import DocumentParserRegistry
+
+parser_registry = DocumentParserRegistry()
 from app.schemas.document import (
     DocumentUploadResponse,
     DocumentResponse,
@@ -57,6 +60,23 @@ async def upload_documents(
         file_size = len(content)
         file_hash = hashlib.sha256(content).hexdigest()
         ext = Path(file.filename or "unknown.txt").suffix.lower()
+
+        # Validate supported file type to prevent unauthorized executable/script uploads
+        if ext not in parser_registry.get_supported_extensions():
+            upload_responses.append(
+                DocumentUploadResponse(
+                    document_id="unsupported",
+                    job_id="rejected",
+                    title=file.filename or "unknown",
+                    filename=file.filename or "unknown",
+                    file_type=ext.lstrip(".") or "unknown",
+                    file_size_bytes=file_size,
+                    status="failed",
+                    is_duplicate=False,
+                    message=f"Unsupported or restricted file format '{ext}'. Allowed extensions: {', '.join(parser_registry.get_supported_extensions())}",
+                )
+            )
+            continue
 
         # Check for duplicate document
         existing = await db.scalar(select(Document).where(Document.file_hash == file_hash))

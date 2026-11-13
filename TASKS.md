@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 10 (Analytics & Diagnostics) -> Complete. Beginning Phase 11 (Security & Hardening)
+- **Current Phase:** Phase 11 (Security & Hardening) -> Complete. Beginning Phase 12 (Packaging & Documentation)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -109,8 +109,8 @@
 - [x] Verification of real measured data.
 
 ### Phase 11: Security & Hardening
-- [ ] Comprehensive security audit (inputs, paths, sandbox, secrets).
-- [ ] Dependency scanning and vulnerability fixes.
+- [x] Comprehensive security audit (inputs, paths, sandbox, secrets).
+- [x] Dependency scanning and vulnerability fixes.
 
 ### Phase 12: Packaging & Documentation
 - [ ] Production build and static serving.

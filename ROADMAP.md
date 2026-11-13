@@ -199,17 +199,17 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 11 --- Security and hardening
-- [ ] Review and verify secure secret storage (no plaintext keys in SQLite).
-- [ ] Review upload validation and MIME checking.
-- [ ] Review path traversal guards on file reads and exports.
-- [ ] Review safe archive handling.
-- [ ] Review subprocess execution boundaries and sanitization.
-- [ ] Review code sandbox limits (timeout, memory, syscall restrictions).
-- [ ] Review prompt injection protections in document parsing.
-- [ ] Review cloud data disclosure flags.
-- [ ] Review deletion cascading and backup integrity.
-- [ ] Run security linters and full test suite.
-- [ ] Resolve any identified high/critical vulnerabilities.
+- [x] Review and verify secure secret storage (no plaintext keys in SQLite).
+- [x] Review upload validation and MIME checking.
+- [x] Review path traversal guards on file reads and exports.
+- [x] Review safe archive handling.
+- [x] Review subprocess execution boundaries and sanitization.
+- [x] Review code sandbox limits (timeout, memory, syscall restrictions).
+- [x] Review prompt injection protections in document parsing.
+- [x] Review cloud data disclosure flags.
+- [x] Review deletion cascading and backup integrity.
+- [x] Run security linters and full test suite.
+- [x] Resolve any identified high/critical vulnerabilities.
 
 **Acceptance criteria:** No known critical security issue remains; destructive actions require confirmation; private data is not silently transmitted.
 
