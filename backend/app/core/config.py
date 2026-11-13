@@ -43,7 +43,7 @@ class Settings(BaseSettings):
 
     # Web Search (SearXNG)
     searxng_url: Optional[str] = Field(default="http://127.0.0.1:8080", alias="SEARXNG_URL")
-    searxng_timeout: int = Field(default=10, alias="SEARXNG_TIMEOUT")
+    searxng_timeout: int = Field(default=15, alias="SEARXNG_TIMEOUT")
 
     # External AI Providers
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", alias="OLLAMA_BASE_URL")
