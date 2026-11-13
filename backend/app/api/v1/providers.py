@@ -249,3 +249,28 @@ async def stream_chat_probe(request: ChatStreamRequest, db: AsyncSession = Depen
             yield f"data: {err_payload}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/agy/status", summary="AGY CLI Status and Discovery")
+async def get_agy_status():
+    """Detect whether AGY CLI is installed and discover its status and models."""
+    from app.services.ai.adapters.agy import AGYAdapter
+    adapter = AGYAdapter(name="AGY CLI", provider_type="agy")
+    conn = await adapter.test_connection()
+    models = await adapter.list_models()
+    return {
+        "connection": conn,
+        "is_available": adapter.is_available(),
+        "executable_path": adapter.bin_path,
+        "models": [m.model_dump() for m in models],
+    }
+
+
+@router.get("/agy/usage", summary="AGY Quota and Usage Dashboard")
+async def get_agy_usage():
+    """Execute 'agy -p /usage --output-format json' and return structured quota groups and windows."""
+    from app.services.ai.adapters.agy import AGYAdapter
+    adapter = AGYAdapter(name="AGY CLI", provider_type="agy")
+    usage = await adapter.get_quota_summary()
+    return usage
+

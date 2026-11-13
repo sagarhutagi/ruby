@@ -453,6 +453,7 @@ export function streamChat(
     onThinkToken?: (token: string) => void;
     onMemories?: (memories: any[]) => void;
     onMemorySaved?: (memory: any) => void;
+    onAutoModeRouted?: (data: { effective_mode: string; explanation: string }) => void;
     onToken?: (token: string) => void;
     onDone?: (data: any) => void;
     onError?: (error: string) => void;
@@ -505,6 +506,8 @@ export function streamChat(
                 callbacks.onWebSearchError(parsed.error || 'Web search warning');
               } else if (currentEvent === 'step' && callbacks.onStep) {
                 callbacks.onStep(parsed.step);
+              } else if (currentEvent === 'auto_mode_routed' && callbacks.onAutoModeRouted) {
+                callbacks.onAutoModeRouted(parsed);
               } else if (currentEvent === 'memories' && callbacks.onMemories) {
                 callbacks.onMemories(parsed.memories || []);
               } else if (currentEvent === 'memory_saved' && callbacks.onMemorySaved) {
@@ -543,6 +546,42 @@ export async function fetchSearxngStatus(): Promise<{
 }> {
   const res = await fetch(`${API_BASE}/chat/search/status`);
   if (!res.ok) throw new Error('Failed to fetch SearXNG status');
+  return res.json();
+}
+
+export async function fetchAgyStatus(): Promise<{
+  connection: any;
+  is_available: boolean;
+  executable_path: string | null;
+  models: any[];
+}> {
+  const res = await fetch(`${API_BASE}/providers/agy/status`);
+  if (!res.ok) throw new Error('Failed to fetch AGY status');
+  return res.json();
+}
+
+export async function fetchAgyUsage(): Promise<{
+  success: boolean;
+  timestamp?: string;
+  groups?: Array<{
+    name: string;
+    description: string;
+    buckets: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      window: string;
+      remaining_fraction: number;
+      remaining_percentage: number;
+      used_percentage: number;
+      reset_time: string;
+    }>;
+  }>;
+  general_description?: string;
+  error?: string;
+}> {
+  const res = await fetch(`${API_BASE}/providers/agy/usage`);
+  if (!res.ok) throw new Error('Failed to fetch AGY usage');
   return res.json();
 }
 

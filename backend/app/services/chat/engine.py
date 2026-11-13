@@ -1,4 +1,5 @@
 import time
+import json
 import logging
 from typing import AsyncGenerator, Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,9 @@ from app.services.ai.manager import provider_manager
 from app.services.ai.base import ChatMessage
 from app.services.search.searxng import searxng_client
 from app.services.memory.service import memory_service
+from app.services.agent.planner import AgentPlanner
+from app.services.tools.registry import tool_registry
+from app.services.tools.sanitizer import search_query_sanitizer
 
 logger = logging.getLogger("ruby.chat.engine")
 
@@ -141,6 +145,7 @@ class ChatEngine:
         conversation_prompt: Optional[str] = None,
         has_web_sources: bool = False,
         has_memories: bool = False,
+        has_tool_results: bool = False,
     ) -> str:
         base_instruction = (
             "You are RUBY, a rigorous, local-first personal academic intelligence assistant.\n"
@@ -166,6 +171,13 @@ class ChatEngine:
                 "- Attribute facts directly to the search results using clickable markdown links [Source Title](URL) or [Web #X].\n"
                 "- Provide up-to-date, comprehensive information from the live internet."
             )
+        elif mode == "coding":
+            mode_instruction = (
+                "ANSWER MODE: CODING & ALGORITHM SANDBOX.\n"
+                "- Provide verified, robust code implementations with syntax tags.\n"
+                "- Incorporate tool execution outputs (test runs, AST verification, and DSA step traces) directly into your explanations.\n"
+                "- Explain time and space complexities using Big-O notation."
+            )
         elif mode == "hybrid":
             mode_instruction = (
                 "ANSWER MODE: HYBRID (Grounded Evidence + General Knowledge).\n"
@@ -184,6 +196,14 @@ class ChatEngine:
                 "ANSWER MODE: GENERAL KNOWLEDGE.\n"
                 "- Answer using your general academic knowledge base.\n"
                 "- Note that no specific document context has been attached for this query."
+            )
+
+        tool_instruction = ""
+        if has_tool_results:
+            tool_instruction = (
+                "\n\nVERIFIED TOOL EXECUTION RESULTS:\n"
+                "- Exact computational outputs from backend tools (symbolic math solver, sandboxed python code, algorithm tracers, and system diagnostics) are provided in the TOOL OBSERVATIONS context block.\n"
+                "- Use these verified computational results as authoritative ground truth rather than performing mental arithmetic or guessing output."
             )
 
         web_instruction = ""
@@ -212,7 +232,7 @@ class ChatEngine:
         )
 
         custom = f"\nCustom Instructions:\n{conversation_prompt}\n" if conversation_prompt else ""
-        return f"{base_instruction}\n\n{mode_instruction}{web_instruction}{memory_instruction}{thinking_instruction}{custom}"
+        return f"{base_instruction}\n\n{mode_instruction}{tool_instruction}{web_instruction}{memory_instruction}{thinking_instruction}{custom}"
 
     async def stream_chat(
         self,
@@ -259,28 +279,83 @@ class ChatEngine:
         await session.commit()
 
         target_subject = subject_id or conv.subject_id
-        if mode in ("web-search", "web"):
+        effective_mode = mode
+        mode_explanation = ""
+        planned_tools: List[Dict[str, Any]] = []
+
+        if mode == "auto":
+            try:
+                plan = await AgentPlanner.plan_intent_and_tools(
+                    provider=None,
+                    prompt=user_content,
+                    mode="auto",
+                )
+                effective_mode = plan["effective_mode"]
+                mode_explanation = plan["mode_explanation"]
+                planned_tools = plan["selected_tools"]
+                step_intent = step_tracker.update(
+                    step_id="intent",
+                    label=f"Mode Routed: {effective_mode.replace('-', ' ').title()} (Auto)",
+                    status="completed",
+                    description=mode_explanation,
+                )
+                yield {"type": "step", "step": step_intent}
+                yield {
+                    "type": "auto_mode_routed",
+                    "effective_mode": effective_mode,
+                    "explanation": mode_explanation,
+                }
+            except Exception as e:
+                logger.warning("Error in auto mode planning: %s", e)
+                effective_mode = "resource-grounded"
+                mode_explanation = "Auto mode defaulted to course notes grounding."
+                step_intent = step_tracker.update(
+                    step_id="intent",
+                    label="Mode Routed: Grounded (Auto Fallback)",
+                    status="completed",
+                    description=mode_explanation,
+                )
+                yield {"type": "step", "step": step_intent}
+        elif mode in ("web-search", "web"):
+            effective_mode = "web-search"
+            mode_explanation = "Targeting live web search (SearXNG) without local document retrieval."
             step_intent = step_tracker.update(
                 step_id="intent",
                 label="Mode Routed: Web Search",
                 status="completed",
-                description="Targeting live web search (SearXNG) without local document retrieval.",
+                description=mode_explanation,
             )
+            yield {"type": "step", "step": step_intent}
         elif mode in ("resource-grounded", "hybrid", "research"):
+            effective_mode = mode
+            mode_explanation = f"Targeting local course documents ({target_subject or 'All Course Materials'})."
             step_intent = step_tracker.update(
                 step_id="intent",
                 label=f"Mode Routed: {mode_label}",
                 status="completed",
-                description=f"Targeting local course documents ({target_subject or 'All Course Materials'}).",
+                description=mode_explanation,
             )
+            yield {"type": "step", "step": step_intent}
+        elif mode == "coding":
+            effective_mode = "coding"
+            mode_explanation = "Coding & Algorithm Sandbox: Verified implementations and algorithm execution."
+            step_intent = step_tracker.update(
+                step_id="intent",
+                label="Mode Routed: Coding Sandbox",
+                status="completed",
+                description=mode_explanation,
+            )
+            yield {"type": "step", "step": step_intent}
         else:
+            effective_mode = "general"
+            mode_explanation = "Using general academic knowledge without document retrieval."
             step_intent = step_tracker.update(
                 step_id="intent",
                 label="Mode Routed: General Knowledge",
                 status="completed",
-                description="Using general academic knowledge without document retrieval.",
+                description=mode_explanation,
             )
-        yield {"type": "step", "step": step_intent}
+            yield {"type": "step", "step": step_intent}
 
         # 2.5 Long-Term Memory Step (Candidate Extraction & Recalling)
         step_mem = step_tracker.update(
@@ -370,16 +445,53 @@ class ChatEngine:
             )
             yield {"type": "step", "step": step_mem}
 
-        # 3. Retrieval Step (if grounded, hybrid, or research)
+        # 2.8 Execute computational and system tools (SymPy, Code Sandbox, DSA, Hardware)
+        tool_observations: List[Dict[str, Any]] = []
+        for t in planned_tools:
+            t_name = t["name"]
+            t_args = t.get("arguments", {})
+            if t_name not in ("web_search", "document_search"):
+                t_label = t_name.replace("_", " ").title()
+                step_tool = step_tracker.update(
+                    step_id=f"tool_{t_name}",
+                    label=f"Executing Tool: {t_label}",
+                    status="running",
+                    description=f"Running {t_name} with: {str(t_args)[:60]}...",
+                )
+                yield {"type": "step", "step": step_tool}
+                t_res = await tool_registry.execute(t_name, t_args, session=session)
+                step_tool = step_tracker.update(
+                    step_id=f"tool_{t_name}",
+                    label=f"Tool Completed: {t_label}",
+                    status="completed" if t_res.success else "failed",
+                    description=f"Finished in {round(t_res.execution_time_ms)}ms",
+                    details=t_res.data if t_res.success else {"error": t_res.error},
+                )
+                yield {"type": "step", "step": step_tool}
+                tool_observations.append({
+                    "tool": t_name,
+                    "arguments": t_args,
+                    "success": t_res.success,
+                    "data": t_res.data,
+                    "error": t_res.error,
+                })
+
+        # 3. Retrieval Step (if grounded, hybrid, research, or document_search planned)
         retrieved_chunks: List[RetrievedChunk] = []
         retrieval_latency_ms = 0.0
 
-        if mode in ("resource-grounded", "hybrid", "research"):
+        should_retrieve_docs = (
+            effective_mode in ("resource-grounded", "hybrid", "research")
+            or any(t["name"] == "document_search" for t in planned_tools)
+        )
+
+        if should_retrieve_docs:
+            clean_retrieval_query = search_query_sanitizer.sanitize_single_query(user_content, max_words=12) or user_content
             step_ret = step_tracker.update(
                 step_id="retrieval",
                 label="Searching Course Documents",
                 status="running",
-                description=f"Searching hybrid vector & keyword indexes for: \"{user_content[:60]}...\"",
+                description=f"Searching hybrid vector & keyword indexes for: \"{clean_retrieval_query[:60]}...\"",
             )
             yield {"type": "step", "step": step_ret}
 
@@ -387,8 +499,8 @@ class ChatEngine:
             try:
                 ret_result = await hybrid_retriever.search(
                     session=session,
-                    query=user_content,
-                    top_k=8 if mode == "research" else 5,
+                    query=clean_retrieval_query,
+                    top_k=8 if effective_mode == "research" else 5,
                     document_ids=document_ids,
                     subject_id=target_subject,
                 )
@@ -428,35 +540,60 @@ class ChatEngine:
                     "error": f"Document retrieval error: {str(e)}",
                 }
 
-        # 4. SearXNG Web Search Step (Web-Search Mode, Manual Toggle, or Auto-Detection)
+        # 4. SearXNG Web Search Step (Focused query generation, never raw user prompt)
         web_search_sources: List[Dict[str, Any]] = []
         should_web_search = (
-            (mode in ("web-search", "web"))
+            (effective_mode in ("web-search", "web"))
             or web_search
+            or any(t["name"] == "web_search" for t in planned_tools)
             or (
-                mode in ("general", "hybrid", "research")
+                effective_mode in ("general", "hybrid", "research")
                 and searxng_client.is_configured()
                 and searxng_client.detect_web_search_need(user_content)
             )
         )
 
         if should_web_search:
+            # Extract keyword-focused search queries
+            planned_web = next((t for t in planned_tools if t["name"] == "web_search"), None)
+            if planned_web and planned_web.get("arguments", {}).get("queries"):
+                focused_queries = planned_web["arguments"]["queries"]
+            else:
+                focused_queries = search_query_sanitizer.extract_queries_from_prompt(user_content, max_queries=2)
+
+            if not focused_queries:
+                sanitized_q = search_query_sanitizer.sanitize_single_query(user_content)
+                focused_queries = [sanitized_q] if sanitized_q else ["recent developments"]
+
+            query_display = " • ".join(focused_queries)
+
             step_web = step_tracker.update(
                 step_id="web_search",
                 label="Searching Live Web (SearXNG)",
                 status="running",
-                description=f"Querying SearXNG for: \"{user_content[:60]}...\"",
+                description=f"Querying SearXNG for: \"{query_display}\"",
             )
             yield {"type": "step", "step": step_web}
             yield {
                 "type": "web_search_start",
-                "query": user_content,
+                "query": query_display,
+                "queries": focused_queries,
             }
 
             try:
-                web_res = await searxng_client.search(query=user_content, num_results=5)
-                if web_res.results:
-                    web_search_sources = [r.model_dump() for r in web_res.results]
+                seen_urls = set()
+                total_latency = 0.0
+                for fq in focused_queries:
+                    web_res = await searxng_client.search(query=fq, num_results=4)
+                    total_latency += web_res.latency_ms
+                    if web_res.results:
+                        for r in web_res.results:
+                            r_dump = r.model_dump()
+                            if r_dump["url"] not in seen_urls:
+                                seen_urls.add(r_dump["url"])
+                                web_search_sources.append(r_dump)
+
+                if web_search_sources:
                     web_details = [
                         {"title": s["title"], "url": s["url"]}
                         for s in web_search_sources
@@ -465,25 +602,13 @@ class ChatEngine:
                         step_id="web_search",
                         label="Web Search Complete",
                         status="completed",
-                        description=f"Found {len(web_search_sources)} live web sources in {round(web_res.latency_ms)}ms",
+                        description=f"Found {len(web_search_sources)} live web sources in {round(total_latency)}ms",
                         details=web_details,
                     )
                     yield {"type": "step", "step": step_web}
                     yield {
                         "type": "web_sources",
                         "sources": web_search_sources,
-                    }
-                elif web_res.error:
-                    step_web = step_tracker.update(
-                        step_id="web_search",
-                        label="Web Search Unavailable",
-                        status="failed",
-                        description=web_res.error,
-                    )
-                    yield {"type": "step", "step": step_web}
-                    yield {
-                        "type": "web_search_error",
-                        "error": web_res.error,
                     }
                 else:
                     step_web = step_tracker.update(
@@ -510,6 +635,18 @@ class ChatEngine:
         # 5. Assemble Context & System Prompt
         context_block = context_assembler.assemble_context(retrieved_chunks) if retrieved_chunks else None
         
+        tool_context_block = None
+        if tool_observations:
+            t_lines = [
+                "=== TOOL OBSERVATIONS (Verified Computation & Execution) ===",
+                "The following computational outputs were produced by backend tools:",
+            ]
+            for obs in tool_observations:
+                data_repr = json.dumps(obs["data"] if obs["success"] else {"error": obs["error"]})
+                t_lines.append(f"- Tool [{obs['tool']}]: {data_repr}")
+            t_lines.append("=============================================================")
+            tool_context_block = "\n".join(t_lines)
+
         web_context_block = None
         if web_search_sources:
             web_lines = [
@@ -534,10 +671,11 @@ class ChatEngine:
             memory_context_block = "\n".join(mem_lines)
 
         system_prompt = self._build_system_prompt(
-            mode=mode,
+            mode=effective_mode,
             conversation_prompt=conv.system_prompt,
             has_web_sources=bool(web_search_sources),
             has_memories=bool(recalled_memories),
+            has_tool_results=bool(tool_observations),
         )
 
         # 6. Fetch previous conversation history (last 10 messages for context)
@@ -558,7 +696,9 @@ class ChatEngine:
         prompt_parts: List[str] = []
         if memory_context_block:
             prompt_parts.append(memory_context_block)
-        if context_block and mode in ("resource-grounded", "hybrid", "research"):
+        if tool_context_block:
+            prompt_parts.append(tool_context_block)
+        if context_block and effective_mode in ("resource-grounded", "hybrid", "research"):
             prompt_parts.append(context_block)
         if web_context_block:
             prompt_parts.append(web_context_block)
@@ -700,7 +840,7 @@ class ChatEngine:
         yield {"type": "step", "step": step_gen}
 
         # If general mode without web search, append clear indication
-        if mode == "general" and not web_search_sources:
+        if effective_mode == "general" and not web_search_sources:
             tag = "\n\n*[General Knowledge: Answered using model knowledge without document grounding]*"
             full_response += tag
             yield {"type": "token", "content": tag}
@@ -744,9 +884,13 @@ class ChatEngine:
             "retrieval_latency_ms": round(retrieval_latency_ms, 2),
             "generation_latency_ms": round(gen_latency_ms, 2),
             "total_latency_ms": round(total_latency_ms, 2),
-            "mode": mode,
+            "mode": effective_mode,
+            "mode_explanation": mode_explanation,
+            "requested_mode": mode,
             "provider": adapter.provider_type,
             "model": model_name,
+            "tool_observations_count": len(tool_observations),
+            "tool_observations": tool_observations,
             "grounding": validation_report.model_dump(),
             "web_sources_count": len(web_search_sources),
             "web_sources": web_search_sources,
@@ -769,7 +913,7 @@ class ChatEngine:
             conversation_id=conversation_id,
             role="assistant",
             content=full_response,
-            mode=mode,
+            mode=effective_mode,
             provider_used=adapter.provider_type,
             model_used=model_name,
             citations=[c.model_dump() for c in validation_report.citations],

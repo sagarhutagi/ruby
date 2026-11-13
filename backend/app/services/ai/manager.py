@@ -11,6 +11,7 @@ from app.services.ai.adapters.gemini import GeminiAdapter
 from app.services.ai.adapters.claude import ClaudeAdapter
 from app.services.ai.adapters.openrouter import OpenRouterAdapter
 from app.services.ai.adapters.generic_openai import GenericOpenAIAdapter
+from app.services.ai.adapters.agy import AGYAdapter
 
 logger = logging.getLogger("ruby.ai.manager")
 
@@ -21,6 +22,7 @@ ADAPTER_MAP: Dict[str, Type[BaseAIProvider]] = {
     "anthropic": ClaudeAdapter,
     "openrouter": OpenRouterAdapter,
     "generic": GenericOpenAIAdapter,
+    "agy": AGYAdapter,
 }
 
 

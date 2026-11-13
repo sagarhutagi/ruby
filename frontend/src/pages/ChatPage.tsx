@@ -32,6 +32,8 @@ import {
   AlertCircle,
   Brain,
   Loader2,
+  Terminal,
+  Activity,
 } from 'lucide-react';
 import {
   fetchConversation,
@@ -39,6 +41,7 @@ import {
   exportConversationMarkdown,
   streamChat,
   ChatMessageItem,
+  fetchAgyUsage,
 } from '../services/api';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 
@@ -56,6 +59,15 @@ async function getProviders() {
 
 const CHAT_MODES = [
   {
+    id: 'auto',
+    name: 'Auto',
+    icon: Sparkles,
+    color: 'text-indigo-400',
+    borderColor: 'border-indigo-500/40',
+    summary: 'Automatically selects the most appropriate chat mode and tools based on your request.',
+    whenToUse: 'Recommended default: let Ruby automatically determine whether you need course notes, web search, math solvers, or code sandboxes.',
+  },
+  {
     id: 'resource-grounded',
     name: 'Grounded',
     icon: Shield,
@@ -72,6 +84,15 @@ const CHAT_MODES = [
     borderColor: 'border-sky-500/40',
     summary: 'Searches the live web exclusively via SearXNG without querying local course documents.',
     whenToUse: 'Use for current events, online documentation, latest library updates, and real-time external info.',
+  },
+  {
+    id: 'coding',
+    name: 'Coding',
+    icon: Terminal,
+    color: 'text-teal-400',
+    borderColor: 'border-teal-500/40',
+    summary: 'Executes Python code in sandboxes, traces algorithms (DSA), and verifies syntax.',
+    whenToUse: 'Use when developing software, dry-running algorithms, or analyzing time and space complexities.',
   },
   {
     id: 'general',
@@ -132,9 +153,11 @@ export const ChatPage: React.FC = () => {
 
   // Chat Configuration State
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
-  const [chatMode, setChatMode] = useState<string>('resource-grounded');
+  const [chatMode, setChatMode] = useState<string>('auto');
   const [inputText, setInputText] = useState('');
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(false);
+  const [autoModeRouted, setAutoModeRouted] = useState<{ effective_mode: string; explanation: string } | null>(null);
+  const [agyUsageOpen, setAgyUsageOpen] = useState(false);
 
   // Streaming State
   const [isStreaming, setIsStreaming] = useState(false);
@@ -182,6 +205,12 @@ export const ChatPage: React.FC = () => {
   const { data: providers } = useQuery({
     queryKey: ['providers'],
     queryFn: getProviders,
+  });
+
+  const { data: agyUsage, refetch: refetchAgyUsage, isFetching: isAgyUsageLoading } = useQuery({
+    queryKey: ['agyUsage'],
+    queryFn: fetchAgyUsage,
+    enabled: agyUsageOpen,
   });
 
   const activeProvider = providers?.find((p: any) => p.is_default) || providers?.[0];
@@ -256,6 +285,7 @@ export const ChatPage: React.FC = () => {
     setIsLiveThinkingExpanded(true);
     setIsSearchingWeb(false);
     setWebSearchQuery('');
+    setAutoModeRouted(null);
 
     const cancel = streamChat(
       {
@@ -279,6 +309,9 @@ export const ChatPage: React.FC = () => {
         },
         onWebSearchError: () => {
           setIsSearchingWeb(false);
+        },
+        onAutoModeRouted: (data) => {
+          setAutoModeRouted(data);
         },
         onMemories: (mems) => {
           setStreamingMemories(mems);
@@ -515,6 +548,16 @@ export const ChatPage: React.FC = () => {
             <span className="hidden lg:inline text-xs font-medium">Memories</span>
           </Link>
 
+          {/* AGY Quotas & Usage Dashboard Pill */}
+          <button
+            onClick={() => setAgyUsageOpen(true)}
+            className="p-1.5 text-[#b4b4b4] hover:text-indigo-300 rounded-lg hover:bg-[#2f2f2f] transition-colors flex items-center gap-1 text-xs cursor-pointer"
+            title="AGY Quotas & Usage Dashboard"
+          >
+            <Activity className="w-4 h-4 text-indigo-400" />
+            <span className="hidden lg:inline text-xs font-medium">AGY Quotas</span>
+          </button>
+
           {/* Export Chat */}
           {currentConv && (
             <button
@@ -558,6 +601,14 @@ export const ChatPage: React.FC = () => {
                         <span className="font-medium text-white text-sm">Ruby</span>
                         <span>•</span>
                         <span className="capitalize">{msg.mode || 'Grounded'}</span>
+                        {msg.diagnostics?.requested_mode === 'auto' && (
+                          <span
+                            className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-700/50"
+                            title={msg.diagnostics.mode_explanation || 'Auto routed by Ruby Agent'}
+                          >
+                            Auto
+                          </span>
+                        )}
                         {msg.diagnostics?.total_latency_ms && (
                           <>
                             <span>•</span>
@@ -858,6 +909,13 @@ export const ChatPage: React.FC = () => {
 
                 {/* Claude-style Live Activity Stepper & Thinking Box */}
                 <div className="pl-9 space-y-3">
+                  {autoModeRouted && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-950/70 border border-indigo-700/50 text-xs text-indigo-300 shadow-sm">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <span><strong>Auto Mode:</strong> {autoModeRouted.explanation}</span>
+                    </div>
+                  )}
+
                   {(streamingSteps.length > 0 || isSearchingWeb || !!streamingThinking) && (
                     <div className="rounded-2xl bg-[#191919] border border-[#333] p-3.5 space-y-3 shadow-lg">
                       <div className="flex items-center justify-between text-xs text-[#b4b4b4] pb-2 border-b border-[#2e2e2e]">
@@ -1353,6 +1411,106 @@ export const ChatPage: React.FC = () => {
                   {selectedCitationChunk.raw_tag}
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AGY Quotas & Usage Dashboard Modal */}
+      {agyUsageOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#242424] border border-[#383838] rounded-2xl w-full max-w-xl shadow-2xl p-6 text-[#ececec]">
+            <div className="flex items-center justify-between pb-4 border-b border-[#333]">
+              <div className="flex items-center gap-2.5">
+                <Activity className="w-5 h-5 text-indigo-400" />
+                <h2 className="text-base font-semibold text-white">AGY CLI Quotas & Usage Dashboard</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => refetchAgyUsage()}
+                  disabled={isAgyUsageLoading}
+                  className="p-1.5 rounded-lg hover:bg-[#333] text-[#a1a1aa] hover:text-white transition-colors cursor-pointer"
+                  title="Refresh Quotas"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isAgyUsageLoading ? 'animate-spin text-indigo-400' : ''}`} />
+                </button>
+                <button
+                  onClick={() => setAgyUsageOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-[#333] text-[#a1a1aa] hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              {isAgyUsageLoading ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-sm text-[#a1a1aa]">
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+                  <span>Fetching live quotas from AGY CLI...</span>
+                </div>
+              ) : agyUsage?.groups && agyUsage.groups.length > 0 ? (
+                <>
+                  <p className="text-xs text-[#a1a1aa] leading-relaxed">
+                    {agyUsage.general_description ||
+                      'Within each group, models share a weekly limit and a 5-hour limit. Quota is consumed proportionally.'}
+                  </p>
+                  {agyUsage.groups.map((group: any, gIdx: number) => (
+                    <div key={gIdx} className="p-4 rounded-xl bg-[#1c1c1c] border border-[#333] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-white">{group.name}</h3>
+                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-[#2e2e2e] text-indigo-300 border border-[#3e3e3e]">
+                          Shared Group
+                        </span>
+                      </div>
+                      {group.description && (
+                        <p className="text-xs text-[#8e8e8e]">{group.description}</p>
+                      )}
+                      <div className="space-y-3 pt-1">
+                        {group.buckets?.map((bucket: any, bIdx: number) => (
+                          <div key={bIdx} className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-[#ccc] font-medium">{bucket.name}</span>
+                              <span className="font-mono text-indigo-300 font-semibold">
+                                {bucket.remaining_percentage}% left ({bucket.used_percentage}% used)
+                              </span>
+                            </div>
+                            {/* Visual Progress Bar */}
+                            <div className="w-full h-2 bg-[#2d2d2d] rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  bucket.remaining_percentage > 40
+                                    ? 'bg-emerald-500'
+                                    : bucket.remaining_percentage > 15
+                                    ? 'bg-amber-500'
+                                    : 'bg-rose-500'
+                                }`}
+                                style={{ width: `${bucket.remaining_percentage}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-[#777]">
+                              <span>Window: {bucket.window}</span>
+                              {bucket.reset_time && (
+                                <span>
+                                  Resets: {new Date(bucket.reset_time).toLocaleDateString()} {new Date(bucket.reset_time).toLocaleTimeString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="py-6 text-center text-sm text-[#888]">
+                  {agyUsage?.error ? (
+                    <div className="text-rose-400">{agyUsage.error}</div>
+                  ) : (
+                    'No active AGY quotas found.'
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
