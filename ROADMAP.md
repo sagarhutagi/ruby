@@ -19,16 +19,16 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 1 --- Foundation
-- [ ] Create backend project and dependency management.
-- [ ] Create frontend React/TypeScript/Vite project.
-- [ ] Configure Tailwind CSS and UI styling system.
-- [ ] Create FastAPI application and health endpoint (`/api/v1/health`).
-- [ ] Configure SQLite and SQLAlchemy 2 async engine.
-- [ ] Configure Alembic migrations.
-- [ ] Create application settings and configurable data directory.
-- [ ] Create initial dashboard and navigation layout.
-- [ ] Add frontend/backend development and startup scripts.
-- [ ] Add basic backend and frontend automated tests.
+- [x] Create backend project and dependency management.
+- [x] Create frontend React/TypeScript/Vite project.
+- [x] Configure Tailwind CSS and UI styling system.
+- [x] Create FastAPI application and health endpoint (`/api/v1/health`).
+- [x] Configure SQLite and SQLAlchemy 2 async engine.
+- [x] Configure Alembic migrations.
+- [x] Create application settings and configurable data directory.
+- [x] Create initial dashboard and navigation layout.
+- [x] Add frontend/backend development and startup scripts.
+- [x] Add basic backend and frontend automated tests.
 
 **Acceptance criteria:** Both applications start; frontend can call backend health endpoint; database initialises and migrations run; tests pass.
 

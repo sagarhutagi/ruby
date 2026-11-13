@@ -1,0 +1,17 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+sqlalchemy>=2.0.36
+greenlet>=3.1.0
+aiosqlite>=0.20.0
+alembic>=1.14.0
+httpx>=0.28.0
+python-multipart>=0.0.19
+sse-starlette>=2.2.1
+psutil>=6.1.0
+cryptography>=44.0.0
+keyring>=25.6.0
+pytest>=8.3.0
+pytest-asyncio>=0.25.0
+pytest-mock>=3.14.0

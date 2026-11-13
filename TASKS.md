@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 0 (Repository inspection and planning) -> Transitioning to Phase 1 (Foundation)
+- **Current Phase:** Phase 1 (Foundation) -> Complete. Beginning Phase 2 (AI Provider Infrastructure)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -19,20 +19,20 @@
 - [x] Document risks, dependencies, and implementation strategy.
 
 ### Phase 1: Foundation
-- [ ] Initialize backend Python environment and directory structure (`backend/app`).
-- [ ] Define backend dependencies in `requirements.txt` (FastAPI, uvicorn, sqlalchemy, aiosqlite, pydantic, pydantic-settings, alembic, httpx, pytest, pytest-asyncio).
-- [ ] Create `backend/app/core/config.py` with configurable paths and settings.
-- [ ] Create `backend/app/database/session.py` with async SQLAlchemy SQLite engine and base model.
-- [ ] Setup Alembic migrations framework in `backend/migrations/`.
-- [ ] Create initial FastAPI application `backend/app/main.py` with `/api/v1/health` and CORS restricted to localhost.
-- [ ] Initialize frontend React 19 + TypeScript + Vite project in `frontend/`.
-- [ ] Configure Tailwind CSS and Lucide icons in frontend.
-- [ ] Implement core frontend layout (Sidebar, Header, Main Container) matching dark-first UI aesthetic.
-- [ ] Implement frontend API client and TanStack Query integration.
-- [ ] Create root runner scripts: `start.sh` (or dev script) and verify end-to-end connectivity.
-- [ ] Write backend unit tests for health check, config, and database connection.
-- [ ] Write frontend unit tests for layout and health status indicator.
-- [ ] Execute test suite and verify all acceptance criteria for Phase 1.
+- [x] Initialize backend Python environment and directory structure (`backend/app`).
+- [x] Define backend dependencies in `requirements.txt` (FastAPI, uvicorn, sqlalchemy, greenlet, aiosqlite, pydantic, pydantic-settings, alembic, httpx, pytest, pytest-asyncio).
+- [x] Create `backend/app/core/config.py` with configurable paths and settings.
+- [x] Create `backend/app/database/session.py` with async SQLAlchemy SQLite engine and base model.
+- [x] Setup Alembic migrations framework in `backend/migrations/` and apply initial schema migration.
+- [x] Create initial FastAPI application `backend/app/main.py` with `/api/v1/health` and CORS restricted to localhost.
+- [x] Initialize frontend React 19 + TypeScript + Vite project in `frontend/`.
+- [x] Configure Tailwind CSS and Lucide icons in frontend.
+- [x] Implement core frontend layout (Sidebar, Header, AppLayout) and 10 main pages matching dark-first UI aesthetic.
+- [x] Implement frontend API client and TanStack Query integration.
+- [x] Create runner scripts: `start.sh`, `stop.sh`, `scripts/dev.sh`, `scripts/run_tests.sh`.
+- [x] Write backend unit tests for health check, config, FTS5, and database connection.
+- [x] Write frontend unit tests for layout and health status indicator.
+- [x] Execute test suite and verify all acceptance criteria for Phase 1.
 
 ### Phase 2: AI Provider Infrastructure
 - [ ] Provider interface and capabilities specification.
