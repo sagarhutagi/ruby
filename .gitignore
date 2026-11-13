@@ -37,6 +37,7 @@ data/
 backend/data/
 *.sqlite3
 *.db
+*.pid
 chroma/
 
 # Environment variables & secrets

@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 5 (Embeddings & RAG) -> Complete. Beginning Phase 6 (Chat Experience)
+- **Current Phase:** Phase 6 (Chat Experience) -> Complete. Beginning Phase 7 (Memory Subsystem)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -70,14 +70,13 @@
 - [x] Retrieval diagnostics panel.
 - [x] RAG evaluation tests.
 
-
 ### Phase 6: Chat Experience
-- [ ] SQLite conversation and message persistence.
-- [ ] SSE streaming chat endpoint and frontend streaming consumer.
-- [ ] Markdown, KaTeX LaTeX, and syntax-highlighted code rendering.
-- [ ] Collapsible citation and source inspector panel.
-- [ ] Answer modes: Resource-grounded, General, Hybrid, Research.
-- [ ] Chat tests.
+- [x] SQLite conversation and message persistence.
+- [x] SSE streaming chat endpoint and frontend streaming consumer.
+- [x] Markdown, KaTeX LaTeX, and syntax-highlighted code rendering.
+- [x] Collapsible citation and source inspector panel.
+- [x] Answer modes: Resource-grounded, General, Hybrid, Research.
+- [x] Chat tests.
 
 ### Phase 7: Memory Subsystem
 - [ ] 5-tier memory models (Working, Episodic, Semantic, Profile, Procedural).

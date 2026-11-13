@@ -115,17 +115,17 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 6 --- Chat experience
-- [ ] Implement conversation and message persistence in SQLite.
-- [ ] Implement streaming UI with Server-Sent Events (SSE).
-- [ ] Implement Markdown and code syntax highlighting.
-- [ ] Implement LaTeX equation rendering (KaTeX/MathJax).
-- [ ] Implement citations and interactive collapsible source panel.
-- [ ] Implement subject/document filtering in chat.
-- [ ] Implement Resource-grounded, General, Hybrid, and Research modes.
-- [ ] Implement conversation search, rename, and export.
-- [ ] Implement stop generation and message regeneration.
-- [ ] Show active provider/model and local vs. cloud badges.
-- [ ] Add end-to-end chat integration tests.
+- [x] Implement conversation and message persistence in SQLite.
+- [x] Implement streaming UI with Server-Sent Events (SSE).
+- [x] Implement Markdown and code syntax highlighting.
+- [x] Implement LaTeX equation rendering (KaTeX/MathJax).
+- [x] Implement citations and interactive collapsible source panel.
+- [x] Implement subject/document filtering in chat.
+- [x] Implement Resource-grounded, General, Hybrid, and Research modes.
+- [x] Implement conversation search, rename, and export.
+- [x] Implement stop generation and message regeneration.
+- [x] Show active provider/model and local vs. cloud badges.
+- [x] Add end-to-end chat integration tests.
 
 **Acceptance criteria:** Chat works with local and configured cloud providers, retains conversations, streams responses and displays accurate sources.
 

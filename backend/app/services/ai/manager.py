@@ -115,6 +115,15 @@ class ProviderManager:
         return await cls.get_default_provider(session)
 
     @classmethod
+    async def get_active_adapter(
+        cls, session: AsyncSession, provider_id: Optional[str] = None
+    ) -> BaseAIProvider:
+        """Alias for resolving the active chat adapter."""
+        return await cls.resolve_provider_for_task(
+            session=session, task="chat", requested_provider_id=provider_id
+        )
+
+    @classmethod
     async def ensure_default_ollama_provider(cls, session: AsyncSession) -> None:
         """Seed default local Ollama provider if none exist."""
         stmt = select(ProviderConfig).limit(1)

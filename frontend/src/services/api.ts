@@ -344,3 +344,172 @@ export async function fetchRetrievalStats(): Promise<{
   return res.json();
 }
 
+// Conversation & Chat API
+export interface ConversationItem {
+  id: string;
+  title: string;
+  subject_id?: string | null;
+  system_prompt?: string | null;
+  message_count: number;
+  last_message_preview?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessageItem {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  mode: string;
+  provider_used?: string | null;
+  model_used?: string | null;
+  citations?: any[] | null;
+  diagnostics?: any | null;
+  tokens_used?: number | null;
+  created_at: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  title: string;
+  subject_id?: string | null;
+  system_prompt?: string | null;
+  created_at: string;
+  updated_at: string;
+  messages: ChatMessageItem[];
+}
+
+export async function fetchConversations(params?: { q?: string; subject_id?: string }): Promise<ConversationItem[]> {
+  const query = new URLSearchParams();
+  if (params?.q) query.append('q', params.q);
+  if (params?.subject_id) query.append('subject_id', params.subject_id);
+
+  const res = await fetch(`${API_BASE}/conversations?${query.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch conversations');
+  return res.json();
+}
+
+export async function createConversation(data?: {
+  title?: string;
+  subject_id?: string;
+  system_prompt?: string;
+}): Promise<ConversationDetail> {
+  const res = await fetch(`${API_BASE}/conversations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data || {}),
+  });
+  if (!res.ok) throw new Error('Failed to create conversation');
+  return res.json();
+}
+
+export async function fetchConversation(id: string): Promise<ConversationDetail> {
+  const res = await fetch(`${API_BASE}/conversations/${id}`);
+  if (!res.ok) throw new Error('Failed to fetch conversation');
+  return res.json();
+}
+
+export async function updateConversation(
+  id: string,
+  data: { title?: string; subject_id?: string; system_prompt?: string }
+): Promise<ConversationDetail> {
+  const res = await fetch(`${API_BASE}/conversations/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to update conversation');
+  return res.json();
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/conversations/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete conversation');
+}
+
+export async function exportConversationMarkdown(id: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/conversations/${id}/export`);
+  if (!res.ok) throw new Error('Failed to export conversation');
+  return res.text();
+}
+
+export function streamChat(
+  params: {
+    conversation_id: string;
+    content: string;
+    mode: string;
+    subject_id?: string;
+    document_ids?: string[];
+    provider_id?: string;
+  },
+  callbacks: {
+    onSources?: (chunks: any[]) => void;
+    onToken?: (token: string) => void;
+    onDone?: (data: any) => void;
+    onError?: (error: string) => void;
+  }
+): () => void {
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const response = await fetch(`${API_BASE}/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+        signal: controller.signal,
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Chat stream failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let currentEvent = 'message';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('event:')) {
+            currentEvent = trimmed.replace('event:', '').trim();
+          } else if (trimmed.startsWith('data:')) {
+            const rawData = trimmed.replace('data:', '').trim();
+            if (!rawData) continue;
+            try {
+              const parsed = JSON.parse(rawData);
+              if (currentEvent === 'sources' && callbacks.onSources) {
+                callbacks.onSources(parsed.chunks || []);
+              } else if (currentEvent === 'token' && callbacks.onToken) {
+                callbacks.onToken(parsed.content || '');
+              } else if (currentEvent === 'done' && callbacks.onDone) {
+                callbacks.onDone(parsed);
+              } else if (currentEvent === 'error' && callbacks.onError) {
+                callbacks.onError(parsed.error || 'Stream error');
+              }
+            } catch {
+              // Non-JSON SSE line
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError' && callbacks.onError) {
+        callbacks.onError(err.message || 'Stream connection error');
+      }
+    }
+  })();
+
+  return () => controller.abort();
+}
+
+
