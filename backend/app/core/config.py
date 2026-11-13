@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     encryption_key: Optional[str] = Field(default=None, alias="RUBY_ENCRYPTION_KEY")
 
     # Web Search (SearXNG)
-    searxng_url: Optional[str] = Field(default=None, alias="SEARXNG_URL")
+    searxng_url: Optional[str] = Field(default="http://127.0.0.1:8080", alias="SEARXNG_URL")
     searxng_timeout: int = Field(default=10, alias="SEARXNG_TIMEOUT")
 
     # External AI Providers

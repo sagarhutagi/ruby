@@ -26,6 +26,9 @@ class WebSearchResponse(BaseModel):
     error: Optional[str] = None
 
 
+_UNSET = object()
+
+
 class SearxngClient:
     """
     Client for SearXNG HTTP Search API.
@@ -33,13 +36,16 @@ class SearxngClient:
     Endpoint: GET {base_url}/search?q={query}&format=json
     """
 
-    def __init__(self, base_url: Optional[str] = None, timeout: Optional[int] = None):
+    def __init__(self, base_url: Any = _UNSET, timeout: Optional[int] = None):
         self._custom_url = base_url
         self.timeout = timeout or settings.searxng_timeout
 
     @property
     def base_url(self) -> Optional[str]:
-        raw = self._custom_url or settings.searxng_url
+        if self._custom_url is not _UNSET:
+            raw = self._custom_url
+        else:
+            raw = settings.searxng_url
         if raw:
             return raw.rstrip("/")
         return None

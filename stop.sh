@@ -3,6 +3,17 @@ set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PID_FILE="$DIR/.ruby.pid"
+SEARXNG_PID_FILE="$DIR/.searxng.pid"
+
+# Stop SearXNG gateway if running
+if [ -f "$SEARXNG_PID_FILE" ]; then
+    SPID=$(cat "$SEARXNG_PID_FILE")
+    if ps -p "$SPID" > /dev/null 2>&1; then
+        echo "Stopping SearXNG Gateway ($SPID)..."
+        kill "$SPID" 2>/dev/null || true
+    fi
+    rm -f "$SEARXNG_PID_FILE"
+fi
 
 if [ ! -f "$PID_FILE" ]; then
     echo "Ruby is not running (no PID file found)."
