@@ -71,22 +71,22 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 4 --- Document ingestion and library
-- [ ] Implement PDF parser (PyMuPDF).
-- [ ] Implement DOCX parser (python-docx).
-- [ ] Implement PPTX parser (python-pptx).
-- [ ] Implement XLSX and CSV parsers (openpyxl/pandas).
-- [ ] Implement TXT, Markdown, HTML, JSON and XML parsers.
-- [ ] Implement EPUB parser.
-- [ ] Implement image OCR (pytesseract).
-- [ ] Add optional legacy format conversion.
-- [ ] Preserve page, slide, sheet and cell provenance.
-- [ ] Implement upload and folder import.
-- [ ] Implement SHA-256 duplicate detection.
-- [ ] Implement persistent ingestion background jobs.
-- [ ] Implement cancellation and retry.
-- [ ] Implement subject and collection management.
-- [ ] Implement library search, filters and previews.
-- [ ] Add parser tests using representative test fixtures.
+- [x] Implement PDF parser (PyMuPDF).
+- [x] Implement DOCX parser (python-docx).
+- [x] Implement PPTX parser (python-pptx).
+- [x] Implement XLSX and CSV parsers (openpyxl/pandas).
+- [x] Implement TXT, Markdown, HTML, JSON and XML parsers.
+- [x] Implement EPUB parser.
+- [x] Implement image OCR (pytesseract).
+- [x] Add optional legacy format conversion.
+- [x] Preserve page, slide, sheet and cell provenance.
+- [x] Implement upload and folder import.
+- [x] Implement SHA-256 duplicate detection.
+- [x] Implement persistent ingestion background jobs.
+- [x] Implement cancellation and retry.
+- [x] Implement subject and collection management.
+- [x] Implement library search, filters and previews.
+- [x] Add parser tests using representative test fixtures.
 
 **Acceptance criteria:** Supported files can be imported, parsed and inspected. Failures are visible and recoverable. The UI remains responsive during ingestion.
 

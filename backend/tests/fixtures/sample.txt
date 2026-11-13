@@ -1,0 +1,6 @@
+Operating Systems Core Concepts:
+
+Processes and threads are the fundamental units of execution. A process represents an executing program with its own address space, file handles, and execution state.
+
+Deadlock is a state in which each process is waiting for a resource that another process holds.
+The four necessary Coffman conditions are: Mutual Exclusion, Hold and Wait, No Preemption, and Circular Wait.

@@ -106,6 +106,48 @@ export interface ModelFitResult {
   warning?: string;
 }
 
+export interface DocumentItem {
+  id: string;
+  title: string;
+  filename: string;
+  file_type: string;
+  file_size_bytes: number;
+  file_hash: string;
+  page_count?: number;
+  status: 'pending' | 'parsing' | 'indexed' | 'failed';
+  error_message?: string;
+  subject_id?: string;
+  collection_id?: string;
+  chunk_count: number;
+  meta_info?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentChunkItem {
+  id: string;
+  document_id: string;
+  chunk_index: number;
+  content: string;
+  token_count: number;
+  page_number?: number;
+  slide_number?: number;
+  sheet_name?: string;
+  cell_range?: string;
+  section_heading?: string;
+  meta_info?: Record<string, any>;
+}
+
+export interface IngestionJobStatus {
+  id: string;
+  document_id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  stage: string;
+  progress_percentage: number;
+  error_message?: string;
+}
+
+// Providers API
 export async function fetchProviders(): Promise<ProviderItem[]> {
   const res = await fetch(`${API_BASE}/providers`);
   if (!res.ok) throw new Error('Failed to fetch providers');
@@ -142,6 +184,7 @@ export async function fetchProviderModels(id: string): Promise<DiscoveredModel[]
   return res.json();
 }
 
+// System API
 export async function fetchSystemResources(): Promise<SystemResources> {
   const res = await fetch(`${API_BASE}/system/resources`);
   if (!res.ok) throw new Error('Failed to fetch system telemetry');
@@ -151,5 +194,61 @@ export async function fetchSystemResources(): Promise<SystemResources> {
 export async function checkModelFit(model: string): Promise<ModelFitResult> {
   const res = await fetch(`${API_BASE}/system/model-check?model=${encodeURIComponent(model)}`);
   if (!res.ok) throw new Error('Failed to evaluate model memory fit');
+  return res.json();
+}
+
+// Documents API
+export async function fetchDocuments(params?: {
+  q?: string;
+  subject_id?: string;
+  collection_id?: string;
+  status?: string;
+  file_type?: string;
+}): Promise<DocumentItem[]> {
+  const query = new URLSearchParams();
+  if (params?.q) query.append('q', params.q);
+  if (params?.subject_id) query.append('subject_id', params.subject_id);
+  if (params?.collection_id) query.append('collection_id', params.collection_id);
+  if (params?.status) query.append('status', params.status);
+  if (params?.file_type) query.append('file_type', params.file_type);
+
+  const res = await fetch(`${API_BASE}/documents?${query.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch documents');
+  return res.json();
+}
+
+export async function uploadDocument(
+  file: File,
+  subject_id?: string,
+  collection_id?: string
+): Promise<{ document_id: string; job_id: string; is_duplicate: boolean; message: string }> {
+  const formData = new FormData();
+  formData.append('files', file);
+  if (subject_id) formData.append('subject_id', subject_id);
+  if (collection_id) formData.append('collection_id', collection_id);
+
+  const res = await fetch(`${API_BASE}/documents/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) throw new Error('Document upload failed');
+  const list = await res.json();
+  return list[0];
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/documents/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete document');
+}
+
+export async function fetchDocumentChunks(id: string): Promise<DocumentChunkItem[]> {
+  const res = await fetch(`${API_BASE}/documents/${id}/chunks`);
+  if (!res.ok) throw new Error('Failed to fetch chunks');
+  return res.json();
+}
+
+export async function fetchJobStatus(jobId: string): Promise<IngestionJobStatus> {
+  const res = await fetch(`${API_BASE}/documents/jobs/${jobId}`);
+  if (!res.ok) throw new Error('Failed to fetch job status');
   return res.json();
 }

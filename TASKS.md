@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 3 (Hardware and System Monitoring) -> Complete. Beginning Phase 4 (Document Ingestion and Library)
+- **Current Phase:** Phase 4 (Document Ingestion and Library) -> Complete. Beginning Phase 5 (Embeddings and RAG)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -53,12 +53,13 @@
 - [x] Unit tests for hardware monitoring and graceful fallbacks.
 
 ### Phase 4: Document Ingestion & Library
-- [ ] Multi-format parsers (PDF, DOCX, PPTX, XLSX, CSV, HTML, Markdown, EPUB, Images/OCR).
-- [ ] Provenance preservation (page, slide, sheet, cell, heading).
-- [ ] Ingestion job queue with persistent state, progress, and cancel/retry.
-- [ ] Subject and collection management.
-- [ ] Library UI with upload, search, filters, and preview.
-- [ ] Document parser tests.
+- [x] Multi-format parsers (PDF with PyMuPDF, DOCX, PPTX, XLSX/CSV, HTML/Markdown/JSON/XML, EPUB, Image OCR).
+- [x] Provenance preservation (page number, slide number, sheet/cell coordinate, section heading).
+- [x] Persistent ingestion background jobs with status tracking and progress reporting.
+- [x] SHA-256 duplicate detection preventing redundant storage.
+- [x] Subject and collection CRUD APIs and UI management in `app/api/v1/subjects.py` and `collections.py`.
+- [x] Document library UI with multi-file upload, format filtering, chunk inspector, and deletion in `frontend/src/pages/LibraryPage.tsx`.
+- [x] Comprehensive parser unit tests using representative test fixtures.
 
 ### Phase 5: Embeddings & RAG
 - [ ] Embedding adapter and local SentenceTransformers/ChromaDB store.
