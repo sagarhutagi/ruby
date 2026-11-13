@@ -349,6 +349,14 @@ async def tool_save_memory(
     if not clean_content:
         return {"success": False, "error": "Memory content cannot be empty."}
 
+    # If the content contains academic scorecard data, ingest into canonical structured academic records
+    from app.services.memory.academic_service import academic_memory_service
+    structured_records = await academic_memory_service.parse_and_ingest_scorecard(
+        session=session,
+        text=clean_content,
+        source="tool_save_memory",
+    )
+
     from app.services.memory.service import memory_service
     mem = await memory_service.create_memory(
         session=session,
@@ -363,7 +371,84 @@ async def tool_save_memory(
         "content": mem.content,
         "memory_type": mem.memory_type,
         "is_pinned": mem.is_pinned,
-        "message": f"Successfully stored memory in {mem.memory_type} tier.",
+        "structured_records_created": len(structured_records),
+        "message": f"Successfully stored memory in {mem.memory_type} tier and synchronized {len(structured_records)} academic record(s).",
+    }
+
+
+# 17. Query Academic Records
+async def tool_query_academic_records(
+    subject: str,
+    term: Optional[str] = None,
+    user_id: str = "default_user",
+    session: Optional[AsyncSession] = None,
+) -> Dict[str, Any]:
+    """Query verified student marks, assessments, and percentages for a subject."""
+    if not session:
+        return {"success": False, "error": "Database session required for querying academic records."}
+
+    from app.services.memory.academic_service import academic_memory_service
+    summary = await academic_memory_service.get_subject_percentage(
+        session=session,
+        subject_query=subject,
+        user_id=user_id,
+        term=term,
+    )
+    return {
+        "success": True,
+        "data": summary,
+    }
+
+
+# 18. Compare Academic Assessments
+async def tool_compare_academic_assessments(
+    assessment_a: str = "ISA 1",
+    assessment_b: str = "ISA 2",
+    term: Optional[str] = None,
+    user_id: str = "default_user",
+    session: Optional[AsyncSession] = None,
+) -> Dict[str, Any]:
+    """Compare student marks and percentages across two assessment rounds (e.g., ISA 1 vs ISA 2)."""
+    if not session:
+        return {"success": False, "error": "Database session required for comparing assessments."}
+
+    from app.services.memory.academic_service import academic_memory_service
+    comparisons = await academic_memory_service.compare_assessments(
+        session=session,
+        assessment_a=assessment_a,
+        assessment_b=assessment_b,
+        user_id=user_id,
+        term=term,
+    )
+    return {
+        "success": True,
+        "comparisons": comparisons,
+        "count": len(comparisons),
+    }
+
+
+# 19. Get Academic Performance Summary & Trends
+async def tool_get_academic_performance_summary(
+    term: Optional[str] = None,
+    user_id: str = "default_user",
+    session: Optional[AsyncSession] = None,
+) -> Dict[str, Any]:
+    """Retrieve overall GPA, average performance, top & lowest scores, pending results, and term trends."""
+    if not session:
+        return {"success": False, "error": "Database session required for academic summary."}
+
+    from app.services.memory.academic_service import academic_memory_service
+    avg = await academic_memory_service.get_average_performance(session, user_id=user_id, term=term)
+    high_low = await academic_memory_service.get_highest_lowest_scores(session, user_id=user_id, term=term)
+    pending = await academic_memory_service.get_pending_results(session, user_id=user_id, term=term)
+    trends = await academic_memory_service.get_performance_trends(session, user_id=user_id)
+
+    return {
+        "success": True,
+        "average_performance": avg,
+        "score_extremes": high_low,
+        "pending_results": pending,
+        "trends": trends,
     }
 
 
@@ -663,6 +748,59 @@ def register_all_builtin_tools() -> None:
         permission_level="write",
         timeout_seconds=5.0,
         category="system",
+    )
+
+    # 17. query_academic_records
+    tool_registry.register(
+        name="query_academic_records",
+        description="Query student marks, exam results, and percentages for a specific academic subject or course code from verified records.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "subject": {"type": "string", "description": "Subject code or name (e.g. 'CS301', 'Computer Networks')."},
+                "term": {"type": "string", "description": "Optional semester or term (e.g. 'Semester 5')."},
+            },
+            "required": ["subject"],
+        },
+        handler=tool_query_academic_records,
+        permission_level="read",
+        timeout_seconds=5.0,
+        category="academic",
+    )
+
+    # 18. compare_academic_assessments
+    tool_registry.register(
+        name="compare_academic_assessments",
+        description="Compare subject marks and percentages across two assessment cycles (e.g. 'ISA 1' vs 'ISA 2').",
+        parameters={
+            "type": "object",
+            "properties": {
+                "assessment_a": {"type": "string", "default": "ISA 1", "description": "First assessment name."},
+                "assessment_b": {"type": "string", "default": "ISA 2", "description": "Second assessment name to compare against."},
+                "term": {"type": "string", "description": "Optional academic term."},
+            },
+            "required": ["assessment_a", "assessment_b"],
+        },
+        handler=tool_compare_academic_assessments,
+        permission_level="read",
+        timeout_seconds=5.0,
+        category="academic",
+    )
+
+    # 19. get_academic_performance_summary
+    tool_registry.register(
+        name="get_academic_performance_summary",
+        description="Retrieve overall academic performance summary: average percentage, top and lowest scores, pending results, and term-by-term GPA trends.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "term": {"type": "string", "description": "Optional academic term filter (e.g. 'Semester 5')."},
+            },
+        },
+        handler=tool_get_academic_performance_summary,
+        permission_level="read",
+        timeout_seconds=5.0,
+        category="academic",
     )
 
 

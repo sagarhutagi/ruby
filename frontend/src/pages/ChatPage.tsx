@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Sparkles,
-  ArrowUp,
-  Square,
   Shield,
   Globe,
   Shuffle,
@@ -19,21 +17,17 @@ import {
   Check,
   ThumbsUp,
   ThumbsDown,
-  Download,
-  Plus,
-  Layers,
   GraduationCap,
   Calculator,
   Compass,
-  HelpCircle,
   Info,
-  ExternalLink,
   RefreshCw,
   AlertCircle,
   Brain,
   Loader2,
   Terminal,
   Activity,
+  ArrowDown,
 } from 'lucide-react';
 import {
   fetchConversation,
@@ -44,6 +38,11 @@ import {
   fetchAgyUsage,
 } from '../services/api';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import { LayoutContextType } from '../components/layout/AppLayout';
+import { ChatHeader, ChatModeDefinition } from '../components/chat/ChatHeader';
+import { MessageComposer } from '../components/chat/MessageComposer';
+import { ExecutionTimeline, TimelineStep } from '../components/chat/ExecutionTimeline';
+import { WebSourceGrid } from '../components/chat/WebSourceCard';
 
 async function getSubjects() {
   const res = await fetch('/api/v1/subjects');
@@ -57,7 +56,7 @@ async function getProviders() {
   return res.json();
 }
 
-const CHAT_MODES = [
+const CHAT_MODES: ChatModeDefinition[] = [
   {
     id: 'auto',
     name: 'Auto',
@@ -149,6 +148,10 @@ const PROMPT_SUGGESTIONS = [
 export const ChatPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const outletCtx = useOutletContext<LayoutContextType>();
+  const isSidebarOpen = outletCtx?.isSidebarOpen ?? true;
+  const onToggleSidebar = outletCtx?.onToggleSidebar;
+
   const activeConvId = searchParams.get('c');
 
   // Chat Configuration State
@@ -166,29 +169,28 @@ export const ChatPage: React.FC = () => {
   const [streamingWebSources, setStreamingWebSources] = useState<any[]>([]);
   const [streamingMemories, setStreamingMemories] = useState<any[]>([]);
   const [streamingMemorySaved, setStreamingMemorySaved] = useState<any | null>(null);
-  const [streamingSteps, setStreamingSteps] = useState<any[]>([]);
+  const [streamingSteps, setStreamingSteps] = useState<TimelineStep[]>([]);
   const [streamingThinking, setStreamingThinking] = useState<string>('');
-  const [isLiveThinkingExpanded, setIsLiveThinkingExpanded] = useState<boolean>(true);
   const [isSearchingWeb, setIsSearchingWeb] = useState(false);
   const [webSearchQuery, setWebSearchQuery] = useState('');
   const [abortStream, setAbortStream] = useState<(() => void) | null>(null);
 
-  // Optimistic & Error State (Fix for Issue A & B)
+  // Optimistic & Error State
   const [optimisticUserMsg, setOptimisticUserMsg] = useState<ChatMessageItem | null>(null);
   const [chatError, setChatError] = useState<{ message: string; retryPrompt: string } | null>(null);
 
   // Modals & Panels
   const [selectedCitationChunk, setSelectedCitationChunk] = useState<any | null>(null);
   const [expandedDiagnostics, setExpandedDiagnostics] = useState<Record<string, boolean>>({});
-  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-  const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [subjectPickerOpen, setSubjectPickerOpen] = useState(false);
   const [modeHelpOpen, setModeHelpOpen] = useState(false);
   const [helpGuideOpen, setHelpGuideOpen] = useState(false);
 
+  // Scrolling state
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
 
   // Queries
   const { data: currentConv, refetch: refetchCurrentConv } = useQuery({
@@ -215,15 +217,7 @@ export const ChatPage: React.FC = () => {
 
   const activeProvider = providers?.find((p: any) => p.is_default) || providers?.[0];
 
-  // Auto-resize textarea like ChatGPT
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-    }
-  }, [inputText]);
-
-  // Unified message list reconciling optimistic user prompt with database (Issue B Root Cause Fix)
+  // Unified message list reconciling optimistic user prompt with database
   const displayMessages = useMemo(() => {
     const list = [...(currentConv?.messages || [])];
     if (optimisticUserMsg) {
@@ -237,9 +231,25 @@ export const ChatPage: React.FC = () => {
     return list;
   }, [currentConv?.messages, optimisticUserMsg]);
 
-  // Scroll to bottom on new messages or streaming
+  // Handle user scroll detection
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    // If user is more than 120px away from the bottom, mark as scrolled up
+    setUserScrolledUp(distanceFromBottom > 120);
+  };
+
+  const scrollToBottom = (smooth = true) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    setUserScrolledUp(false);
+  };
+
+  // Predictable auto-scrolling: only auto-scroll if user has NOT scrolled up
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!userScrolledUp) {
+      scrollToBottom(false);
+    }
   }, [displayMessages, streamingText, chatError]);
 
   const handleSendMessage = async (customPrompt?: string) => {
@@ -257,7 +267,6 @@ export const ChatPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     }
 
-    // Immediately create and show the optimistic user message (Issue B Root Cause Fix)
     const optUser: ChatMessageItem = {
       id: `opt-${Date.now()}`,
       conversation_id: targetConvId,
@@ -270,9 +279,7 @@ export const ChatPage: React.FC = () => {
     setOptimisticUserMsg(optUser);
     setChatError(null);
     setInputText('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+    setUserScrolledUp(false);
 
     setIsStreaming(true);
     setStreamingText('');
@@ -282,7 +289,6 @@ export const ChatPage: React.FC = () => {
     setStreamingMemorySaved(null);
     setStreamingSteps([]);
     setStreamingThinking('');
-    setIsLiveThinkingExpanded(true);
     setIsSearchingWeb(false);
     setWebSearchQuery('');
     setAutoModeRouted(null);
@@ -351,7 +357,6 @@ export const ChatPage: React.FC = () => {
           queryClient.invalidateQueries({ queryKey: ['conversations'] });
         },
         onError: (err) => {
-          // Meaningful error message with retry option (Issue A Root Cause Fix)
           setIsStreaming(false);
           setIsSearchingWeb(false);
           setChatError({
@@ -399,186 +404,43 @@ export const ChatPage: React.FC = () => {
   };
 
   const selectedSubject = subjects?.find((s: any) => s.id === selectedSubjectId);
-  const activeModeObj = CHAT_MODES.find((m) => m.id === chatMode) || CHAT_MODES[0];
-
   const hasMessages = displayMessages.length > 0 || isStreaming || !!chatError;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#212121] text-[#ececec] relative overflow-hidden select-text">
-      {/* ChatGPT Top Header Bar */}
-      <header className="h-14 border-b border-[#2e2e2e] bg-[#212121]/80 backdrop-blur-md px-4 flex items-center justify-between shrink-0 z-20">
-        {/* Model Selector Dropdown (ChatGPT style) */}
-        <div className="relative">
-          <button
-            onClick={() => setModelPickerOpen((prev) => !prev)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-[#2f2f2f] text-sm font-medium text-[#ececec] transition-colors cursor-pointer"
-          >
-            <span className="font-semibold tracking-tight text-white">
-              {activeProvider?.model_name || 'Ruby 4o'}
-            </span>
-            {activeProvider && (
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#2e2e2e] text-[#a1a1aa] border border-[#3e3e3e]">
-                {activeProvider.provider_type === 'ollama' ? 'Local' : 'Cloud'}
-              </span>
-            )}
-            <ChevronDown className="w-3.5 h-3.5 text-[#8e8e8e]" />
-          </button>
-
-          {modelPickerOpen && (
-            <div className="absolute left-0 top-full mt-1.5 w-72 rounded-2xl bg-[#2a2a2a] border border-[#383838] shadow-2xl p-2 z-50 text-xs">
-              <div className="px-3 py-1.5 text-[11px] font-medium text-[#8e8e8e] uppercase tracking-wider">
-                Active Provider & Model
-              </div>
-              <div className="space-y-1 mt-1">
-                {providers?.map((p: any) => (
-                  <div
-                    key={p.id}
-                    onClick={() => setModelPickerOpen(false)}
-                    className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-colors ${
-                      p.is_default ? 'bg-[#383838] text-white' : 'hover:bg-[#333333] text-[#b4b4b4]'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-medium text-sm text-[#ececec]">{p.model_name}</div>
-                      <div className="text-[11px] text-[#8e8e8e] capitalize">
-                        {p.provider_type} {p.provider_type === 'ollama' && '• Zero Cloud Leakage'}
-                      </div>
-                    </div>
-                    {p.is_default && <Check className="w-4 h-4 text-emerald-400" />}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Center / Right: Mode Switcher Pills & Context Filter */}
-        <div className="flex items-center gap-2">
-          {/* Subject Filter Pill */}
-          <div className="relative">
-            <button
-              onClick={() => setSubjectPickerOpen((prev) => !prev)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#383838] bg-[#282828] hover:bg-[#303030] text-xs text-[#b4b4b4] hover:text-white transition-colors cursor-pointer"
-            >
-              <Layers className="w-3.5 h-3.5 text-[#8e8e8e]" />
-              <span className="max-w-[120px] truncate">
-                {selectedSubject ? selectedSubject.name : 'All Subjects'}
-              </span>
-              <ChevronDown className="w-3 h-3 text-[#8e8e8e]" />
-            </button>
-
-            {subjectPickerOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-56 rounded-xl bg-[#2a2a2a] border border-[#383838] shadow-2xl p-1.5 z-50 text-xs">
-                <button
-                  onClick={() => {
-                    setSelectedSubjectId('');
-                    setSubjectPickerOpen(false);
-                  }}
-                  className={`w-full text-left p-2 rounded-lg transition-colors ${
-                    !selectedSubjectId ? 'bg-[#383838] text-white' : 'text-[#b4b4b4] hover:bg-[#333]'
-                  }`}
-                >
-                  All Course Context
-                </button>
-                {subjects?.map((s: any) => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      setSelectedSubjectId(s.id);
-                      setSubjectPickerOpen(false);
-                    }}
-                    className={`w-full text-left p-2 rounded-lg truncate transition-colors ${
-                      selectedSubjectId === s.id ? 'bg-[#383838] text-white' : 'text-[#b4b4b4] hover:bg-[#333]'
-                    }`}
-                  >
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Mode Switcher Group with Discoverability Tooltip/Help */}
-          <div className="flex items-center bg-[#282828] p-0.5 rounded-xl border border-[#383838]">
-            {CHAT_MODES.map((mode) => {
-              const Icon = mode.icon;
-              const isActive = chatMode === mode.id;
-              return (
-                <button
-                  key={mode.id}
-                  onClick={() => setChatMode(mode.id)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    isActive ? 'bg-[#3e3e3e] text-white shadow-sm' : 'text-[#b4b4b4] hover:text-white'
-                  }`}
-                  title={`${mode.name} Mode: ${mode.summary}`}
-                >
-                  <Icon className={`w-3.5 h-3.5 ${mode.color}`} />
-                  <span className="hidden sm:inline">{mode.name}</span>
-                </button>
-              );
-            })}
-
-            {/* Mode Guide Info Button */}
-            <button
-              onClick={() => setModeHelpOpen(true)}
-              className="p-1 text-[#8e8e8e] hover:text-[#ececec] rounded hover:bg-[#383838] transition-colors ml-0.5"
-              title="Explain Chat Modes"
-            >
-              <Info className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* System Getting Started Guide Button */}
-          <button
-            onClick={() => setHelpGuideOpen(true)}
-            className="p-1.5 text-[#b4b4b4] hover:text-white rounded-lg hover:bg-[#2f2f2f] transition-colors flex items-center gap-1 text-xs"
-            title="Ruby System & Features Guide"
-          >
-            <HelpCircle className="w-4 h-4 text-rose-400" />
-            <span className="hidden md:inline text-xs font-medium">Guide</span>
-          </button>
-
-          {/* Memory Manager Link */}
-          <Link
-            to="/memory"
-            className="p-1.5 text-[#b4b4b4] hover:text-purple-300 rounded-lg hover:bg-[#2f2f2f] transition-colors flex items-center gap-1 text-xs"
-            title="Memory Manager - View and govern persistent long-term memories"
-          >
-            <Brain className="w-4 h-4 text-purple-400" />
-            <span className="hidden lg:inline text-xs font-medium">Memories</span>
-          </Link>
-
-          {/* AGY Quotas & Usage Dashboard Pill */}
-          <button
-            onClick={() => setAgyUsageOpen(true)}
-            className="p-1.5 text-[#b4b4b4] hover:text-indigo-300 rounded-lg hover:bg-[#2f2f2f] transition-colors flex items-center gap-1 text-xs cursor-pointer"
-            title="AGY Quotas & Usage Dashboard"
-          >
-            <Activity className="w-4 h-4 text-indigo-400" />
-            <span className="hidden lg:inline text-xs font-medium">AGY Quotas</span>
-          </button>
-
-          {/* Export Chat */}
-          {currentConv && (
-            <button
-              onClick={handleExportMarkdown}
-              className="p-1.5 text-[#b4b4b4] hover:text-white rounded-lg hover:bg-[#2f2f2f] transition-colors"
-              title="Export conversation as Markdown"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </header>
+      {/* Reorganized Premium Chat Header */}
+      <ChatHeader
+        activeProvider={activeProvider}
+        providers={providers}
+        selectedSubjectId={selectedSubjectId}
+        subjects={subjects}
+        onSelectSubject={(id) => setSelectedSubjectId(id)}
+        chatMode={chatMode}
+        chatModes={CHAT_MODES}
+        onSelectChatMode={(id) => setChatMode(id)}
+        onOpenModeHelp={() => setModeHelpOpen(true)}
+        onOpenSystemGuide={() => setHelpGuideOpen(true)}
+        onOpenAgyUsage={() => setAgyUsageOpen(true)}
+        onExportMarkdown={handleExportMarkdown}
+        canExport={!!currentConv}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={onToggleSidebar}
+      />
 
       {/* Main Conversation Stream */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto relative"
+      >
         {hasMessages ? (
-          <div className="max-w-3xl mx-auto w-full px-4 pt-6 pb-44 space-y-7">
+          <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 pt-6 pb-48 space-y-7">
             {displayMessages.map((msg: ChatMessageItem) => {
               const isUser = msg.role === 'user';
               const isDiagExpanded = !!expandedDiagnostics[msg.id];
               const webSources = msg.diagnostics?.web_sources || [];
+              const steps = msg.diagnostics?.steps || [];
+              const thinkingContent = msg.diagnostics?.thinking_content || '';
 
               return (
                 <div
@@ -586,21 +448,23 @@ export const ChatPage: React.FC = () => {
                   className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
                 >
                   {isUser ? (
-                    /* User Message Bubble - Sleek ChatGPT Right Bubble */
-                    <div className="max-w-[80%] rounded-[24px] bg-[#2f2f2f] text-[#ececec] px-5 py-3 text-[15px] leading-relaxed shadow-sm">
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    /* User Message Bubble - Elevated card with crisp border */
+                    <div className="user-msg-bubble">
+                      <p className="whitespace-pre-wrap break-words text-[15px]">{msg.content}</p>
                     </div>
                   ) : (
-                    /* Assistant Message - Clean Full Width Typography with Avatar */
-                    <div className="w-full space-y-3">
-                      {/* Avatar & Model Header */}
-                      <div className="flex items-center gap-2.5 text-xs text-[#8e8e8e]">
-                        <div className="w-7 h-7 rounded-full bg-[#343541] border border-[#444] flex items-center justify-center text-rose-400 font-bold text-xs shadow-sm">
-                          <Sparkles className="w-4 h-4 text-rose-400" />
+                    /* Assistant Message - Full-width clean container with Ruby avatar */
+                    <div className="assistant-msg-container space-y-3">
+                      {/* Avatar & Header */}
+                      <div className="flex items-center gap-2 text-xs text-[#8e8e8e]">
+                        <div className="w-6 h-6 rounded-lg bg-rose-600/15 border border-rose-500/30 flex items-center justify-center text-rose-400 font-bold shadow-sm">
+                          <Sparkles className="w-3.5 h-3.5 text-rose-400" />
                         </div>
-                        <span className="font-medium text-white text-sm">Ruby</span>
+                        <span className="font-semibold text-white text-sm">Ruby</span>
                         <span>•</span>
-                        <span className="capitalize">{(msg.mode || 'Grounded').replace('-', ' ')}</span>
+                        <span className="capitalize text-[#a1a1aa]">
+                          {(msg.mode || 'Grounded').replace('-', ' ')}
+                        </span>
                         {msg.diagnostics?.requested_mode === 'auto' && (
                           <span
                             className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-700/50"
@@ -612,116 +476,30 @@ export const ChatPage: React.FC = () => {
                         {msg.diagnostics?.total_latency_ms && (
                           <>
                             <span>•</span>
-                            <span className="font-mono text-[11px]">
+                            <span className="font-mono text-[11px] text-[#71717a]">
                               {msg.diagnostics.total_latency_ms}ms
                             </span>
                           </>
                         )}
                       </div>
 
-                      {/* Content */}
-                      <div className="pl-9 text-[15px] leading-7 text-[#ececec]">
-                        {/* Claude-Style Thinking & Activity Trace */}
-                        {(() => {
-                          const steps = msg.diagnostics?.steps || [];
-                          const thinkingContent = msg.diagnostics?.thinking_content || '';
-                          const hasSteps = steps.length > 0;
-                          const hasThinking = !!thinkingContent;
-                          if (!hasSteps && !hasThinking) return null;
+                      {/* Content Area */}
+                      <div className="pl-8 text-[15px] leading-relaxed text-[#ececec]">
+                        {/* Modular Collapsible Execution Timeline */}
+                        <ExecutionTimeline
+                          steps={steps}
+                          thinkingContent={thinkingContent}
+                          totalDurationMs={msg.diagnostics?.total_latency_ms}
+                          recalledMemoriesCount={msg.diagnostics?.recalled_memories_count}
+                          newMemoriesCount={msg.diagnostics?.newly_formed_memories_count}
+                          autoModeExplanation={
+                            msg.diagnostics?.requested_mode === 'auto'
+                              ? msg.diagnostics?.mode_explanation
+                              : undefined
+                          }
+                        />
 
-                          const isExpanded = !!expandedSteps[msg.id];
-
-                          return (
-                            <div className="mb-3.5">
-                              <button
-                                onClick={() =>
-                                  setExpandedSteps((prev) => ({
-                                    ...prev,
-                                    [msg.id]: !prev[msg.id],
-                                  }))
-                                }
-                                className="flex items-center gap-2 text-xs font-medium text-[#b4b4b4] hover:text-white bg-[#262626] hover:bg-[#2e2e2e] px-3 py-1.5 rounded-xl border border-[#383838] transition-all cursor-pointer shadow-sm group"
-                              >
-                                <Brain className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition-transform" />
-                                <span>
-                                  {hasThinking ? 'Thought Process & Steps' : 'Execution Activity Trace'}
-                                  {steps.length > 0 ? ` (${steps.length} steps)` : ''}
-                                </span>
-                                {isExpanded ? (
-                                  <ChevronUp className="w-3.5 h-3.5 text-[#888]" />
-                                ) : (
-                                  <ChevronDown className="w-3.5 h-3.5 text-[#888]" />
-                                )}
-                              </button>
-
-                              {isExpanded && (
-                                <div className="mt-2.5 p-3.5 rounded-2xl bg-[#191919] border border-[#333] space-y-3 shadow-inner">
-                                  {/* Stepper Timeline */}
-                                  {steps.length > 0 && (
-                                    <div className="space-y-2.5 text-xs">
-                                      {steps.map((st: any) => (
-                                        <div key={st.id} className="flex items-start gap-2.5">
-                                          {st.status === 'completed' ? (
-                                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                                          ) : st.status === 'failed' ? (
-                                            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                                          ) : (
-                                            <Loader2 className="w-4 h-4 text-rose-400 animate-spin shrink-0 mt-0.5" />
-                                          )}
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between gap-2">
-                                              <span className="font-semibold text-[#f0f0f0]">{st.label}</span>
-                                              <span className="text-[10px] font-mono text-[#888] uppercase">{st.status}</span>
-                                            </div>
-                                            {st.description && (
-                                              <p className="text-[#a1a1aa] mt-0.5 leading-relaxed">{st.description}</p>
-                                            )}
-                                            {st.details && Array.isArray(st.details) && (
-                                              <div className="mt-1.5 pl-2.5 border-l-2 border-[#383838] space-y-1">
-                                                {st.details.map((d: any, idx: number) => (
-                                                  <div key={idx} className="text-[11px] text-[#93c5fd] truncate flex items-center gap-1.5">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
-                                                    {typeof d === 'string' ? (
-                                                      d
-                                                    ) : (
-                                                      <a
-                                                        href={d.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="hover:underline flex items-center gap-1"
-                                                      >
-                                                        <span>{d.title}</span>
-                                                        <ExternalLink className="w-2.5 h-2.5 opacity-60" />
-                                                      </a>
-                                                    )}
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-
-                                  {/* AI Internal Thought Box */}
-                                  {hasThinking && (
-                                    <div className="pt-2.5 border-t border-[#2d2d2d]">
-                                      <div className="text-[11px] font-mono text-rose-300 mb-1.5 flex items-center gap-1.5">
-                                        <Sparkles className="w-3.5 h-3.5 text-rose-400" />
-                                        <span>Internal Chain of Thought:</span>
-                                      </div>
-                                      <div className="p-3 rounded-xl bg-[#141414] border border-[#282828] text-xs font-mono text-[#a1a1aa] whitespace-pre-wrap leading-relaxed max-h-56 overflow-y-auto select-text shadow-inner">
-                                        {thinkingContent}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-
+                        {/* Main Response Markdown */}
                         <MarkdownRenderer
                           content={msg.content}
                           onCitationClick={(tag) => {
@@ -744,7 +522,7 @@ export const ChatPage: React.FC = () => {
                                 <button
                                   key={cIdx}
                                   onClick={() => setSelectedCitationChunk(c)}
-                                  className={`flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full border transition-colors cursor-pointer shadow-sm ${
+                                  className={`flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-lg border transition-colors cursor-pointer shadow-sm ${
                                     c.is_verified
                                       ? 'bg-[#1e293b]/70 border-[#334155] text-[#93c5fd] hover:bg-[#334155]'
                                       : 'bg-[#3b1219]/70 border-[#5c1d24] text-[#fca5a5] hover:bg-[#5c1d24]'
@@ -765,33 +543,8 @@ export const ChatPage: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Distinct SearXNG Live Web Sources */}
-                        {webSources.length > 0 && (
-                          <div className="mt-3 pt-2.5 border-t border-[#2e2e2e] space-y-1.5">
-                            <span className="text-xs font-medium text-blue-400 flex items-center gap-1.5">
-                              <Globe className="w-3.5 h-3.5 text-blue-400" />
-                              Live Web Sources via SearXNG ({webSources.length}):
-                            </span>
-                            <div className="flex flex-wrap gap-2">
-                              {webSources.map((w: any, wIdx: number) => (
-                                <a
-                                  key={wIdx}
-                                  href={w.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full border border-blue-800/60 bg-blue-950/40 text-blue-300 hover:bg-blue-900/60 hover:text-white transition-colors cursor-pointer shadow-sm"
-                                  title={w.snippet}
-                                >
-                                  <Globe className="w-3 h-3 text-blue-400 shrink-0" />
-                                  <span className="font-sans truncate max-w-[220px]">
-                                    {w.title}
-                                  </span>
-                                  <ExternalLink className="w-2.5 h-2.5 opacity-60" />
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                        {/* Perplexity/Claude-Style Web Sources Card Grid */}
+                        {webSources.length > 0 && <WebSourceGrid sources={webSources} />}
 
                         {/* Diagnostics Detail Box (Collapsible) */}
                         {isDiagExpanded && msg.diagnostics && (
@@ -834,7 +587,7 @@ export const ChatPage: React.FC = () => {
                         <div className="flex items-center gap-2 mt-3 text-[#8e8e8e]">
                           <button
                             onClick={() => handleCopyMessage(msg.id, msg.content)}
-                            className="p-1.5 hover:text-white hover:bg-[#2f2f2f] rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 hover:text-white hover:bg-[#2a2a2a] rounded-lg transition-colors cursor-pointer"
                             title="Copy response"
                           >
                             {copiedMessageId === msg.id ? (
@@ -844,13 +597,13 @@ export const ChatPage: React.FC = () => {
                             )}
                           </button>
                           <button
-                            className="p-1.5 hover:text-white hover:bg-[#2f2f2f] rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 hover:text-white hover:bg-[#2a2a2a] rounded-lg transition-colors cursor-pointer"
                             title="Good response"
                           >
                             <ThumbsUp className="w-4 h-4" />
                           </button>
                           <button
-                            className="p-1.5 hover:text-white hover:bg-[#2f2f2f] rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 hover:text-white hover:bg-[#2a2a2a] rounded-lg transition-colors cursor-pointer"
                             title="Bad response"
                           >
                             <ThumbsDown className="w-4 h-4" />
@@ -863,7 +616,7 @@ export const ChatPage: React.FC = () => {
                                   [msg.id]: !prev[msg.id],
                                 }))
                               }
-                              className="text-[11px] font-mono px-2 py-1 rounded hover:bg-[#2f2f2f] transition-colors flex items-center gap-1 cursor-pointer"
+                              className="text-[11px] font-mono px-2 py-1 rounded hover:bg-[#2a2a2a] text-[#8e8e8e] hover:text-[#ececec] transition-colors flex items-center gap-1 cursor-pointer"
                             >
                               <span>Diagnostics</span>
                               {isDiagExpanded ? (
@@ -884,15 +637,15 @@ export const ChatPage: React.FC = () => {
             {/* Live Streaming Message Card */}
             {isStreaming && (
               <div className="w-full space-y-3">
-                <div className="flex items-center gap-2.5 text-xs text-[#8e8e8e]">
-                  <div className="w-7 h-7 rounded-full bg-[#343541] border border-rose-500/50 flex items-center justify-center text-rose-400 font-bold text-xs animate-pulse">
-                    <Sparkles className="w-4 h-4 text-rose-400" />
+                <div className="flex items-center gap-2 text-xs text-[#8e8e8e]">
+                  <div className="w-6 h-6 rounded-lg bg-rose-600/20 border border-rose-500/50 flex items-center justify-center text-rose-400 font-bold shadow-sm animate-pulse">
+                    <Sparkles className="w-3.5 h-3.5 text-rose-400" />
                   </div>
-                  <span className="font-medium text-white text-sm">Ruby</span>
+                  <span className="font-semibold text-white text-sm">Ruby</span>
                   <span className="text-rose-400 animate-pulse font-mono">• Generating response</span>
                   {streamingSources.length > 0 && (
                     <span className="text-[11px] font-mono text-[#a1a1aa]">
-                      ({streamingSources.length} document chunks)
+                      ({streamingSources.length} chunks)
                     </span>
                   )}
                   {streamingWebSources.length > 0 && (
@@ -907,123 +660,44 @@ export const ChatPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Claude-style Live Activity Stepper & Thinking Box */}
-                <div className="pl-9 space-y-3">
-                  {autoModeRouted && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-950/70 border border-indigo-700/50 text-xs text-indigo-300 shadow-sm">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <span><strong>Auto Mode:</strong> {autoModeRouted.explanation}</span>
+                <div className="pl-8 space-y-3">
+                  {/* Live Execution Timeline */}
+                  <ExecutionTimeline
+                    steps={streamingSteps}
+                    thinkingContent={streamingThinking}
+                    isLive={true}
+                    autoModeExplanation={autoModeRouted?.explanation}
+                    defaultExpanded={true}
+                  />
+
+                  {/* Live Web Search Querying Banner */}
+                  {isSearchingWeb && (
+                    <div className="flex items-center gap-2 text-xs text-sky-400 bg-sky-950/40 border border-sky-800/60 p-2.5 rounded-xl animate-pulse">
+                      <Globe className="w-4 h-4 animate-spin shrink-0 text-sky-400" />
+                      <span>Querying SearXNG live web index for: &quot;{webSearchQuery}&quot;...</span>
                     </div>
                   )}
 
-                  {(streamingSteps.length > 0 || isSearchingWeb || !!streamingThinking) && (
-                    <div className="rounded-2xl bg-[#191919] border border-[#333] p-3.5 space-y-3 shadow-lg">
-                      <div className="flex items-center justify-between text-xs text-[#b4b4b4] pb-2 border-b border-[#2e2e2e]">
-                        <div className="flex items-center gap-2">
-                          <Brain className="w-4 h-4 text-rose-400 animate-pulse" />
-                          <span className="font-semibold text-white">Live Activity Trace & Thinking</span>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-950/80 text-rose-300 border border-rose-800/60 animate-pulse">
-                            In Progress
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setIsLiveThinkingExpanded((prev) => !prev)}
-                          className="text-[#888] hover:text-white transition-colors cursor-pointer"
-                        >
-                          {isLiveThinkingExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
-                      </div>
-
-                      {isLiveThinkingExpanded && (
-                        <div className="space-y-3">
-                          {/* Stepper items */}
-                          {streamingSteps.length > 0 && (
-                            <div className="space-y-2 text-xs">
-                              {streamingSteps.map((st: any) => (
-                                <div key={st.id} className="flex items-start gap-2.5">
-                                  {st.status === 'running' ? (
-                                    <Loader2 className="w-4 h-4 text-rose-400 animate-spin shrink-0 mt-0.5" />
-                                  ) : st.status === 'completed' ? (
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                                  ) : (
-                                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="font-semibold text-[#f0f0f0]">{st.label}</span>
-                                      <span className="text-[10px] font-mono text-[#888] uppercase">{st.status}</span>
-                                    </div>
-                                    {st.description && (
-                                      <p className="text-[#a1a1aa] mt-0.5 leading-relaxed">{st.description}</p>
-                                    )}
-                                    {st.details && Array.isArray(st.details) && (
-                                      <div className="mt-1 pl-2.5 border-l-2 border-[#383838] space-y-1">
-                                        {st.details.map((d: any, idx: number) => (
-                                          <div key={idx} className="text-[11px] text-[#93c5fd] truncate flex items-center gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
-                                            {typeof d === 'string' ? (
-                                              d
-                                            ) : (
-                                              <a
-                                                href={d.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="hover:underline flex items-center gap-1"
-                                              >
-                                                <span>{d.title}</span>
-                                                <ExternalLink className="w-2.5 h-2.5 opacity-60" />
-                                              </a>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Live Web Search Querying Banner */}
-                          {isSearchingWeb && (
-                            <div className="flex items-center gap-2 text-xs text-blue-400 bg-blue-950/40 border border-blue-800/60 p-2.5 rounded-xl animate-pulse">
-                              <Globe className="w-4 h-4 animate-spin shrink-0 text-blue-400" />
-                              <span>Querying SearXNG live web index for: &quot;{webSearchQuery}&quot;...</span>
-                            </div>
-                          )}
-
-                          {/* Live Memory Saved Notification */}
-                          {streamingMemorySaved && (
-                            <div className="flex items-center gap-2 text-xs text-purple-300 bg-purple-950/40 border border-purple-800/60 p-2.5 rounded-xl">
-                              <Brain className="w-4 h-4 shrink-0 text-purple-400" />
-                              <span>Stored in Long-Term Memory: <strong>{streamingMemorySaved.content}</strong></span>
-                            </div>
-                          )}
-
-                          {/* Live Streaming Thoughts (Internal chain of thought) */}
-                          {streamingThinking && (
-                            <div className="pt-2 border-t border-[#2e2e2e]">
-                              <div className="text-[11px] font-mono text-rose-300 mb-1.5 flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 animate-spin text-rose-400" />
-                                <span>Live AI Thinking Stream:</span>
-                              </div>
-                              <div className="p-3 rounded-xl bg-[#141414] border border-[#282828] text-xs font-mono text-[#a1a1aa] whitespace-pre-wrap leading-relaxed max-h-52 overflow-y-auto select-text shadow-inner">
-                                {streamingThinking}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                  {/* Live Memory Saved Banner */}
+                  {streamingMemorySaved && (
+                    <div className="flex items-center gap-2 text-xs text-purple-300 bg-purple-950/40 border border-purple-800/60 p-2.5 rounded-xl">
+                      <Brain className="w-4 h-4 shrink-0 text-purple-400" />
+                      <span>Stored in Long-Term Memory: <strong>{streamingMemorySaved.content}</strong></span>
                     </div>
+                  )}
+
+                  {/* Live Streaming Web Sources Grid */}
+                  {streamingWebSources.length > 0 && (
+                    <WebSourceGrid sources={streamingWebSources} defaultExpanded={true} />
                   )}
 
                   {/* Main Streaming Output */}
-                  <div className="text-[15px] leading-7 text-[#ececec]">
+                  <div className="text-[15px] leading-relaxed text-[#ececec]">
                     {streamingText ? (
                       <MarkdownRenderer content={streamingText} />
                     ) : (
-                      <div className="text-sm text-[#8e8e8e] animate-pulse flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-rose-400" />
+                      <div className="text-sm text-[#8e8e8e] animate-pulse flex items-center gap-2 py-2">
+                        <Loader2 className="w-4 h-4 text-rose-400 animate-spin" />
                         <span>Formulating academic response...</span>
                       </div>
                     )}
@@ -1032,9 +706,9 @@ export const ChatPage: React.FC = () => {
               </div>
             )}
 
-            {/* Chat Error Card with Retry Button (Fix for Issue A) */}
+            {/* Chat Error Card with Retry Button */}
             {chatError && (
-              <div className="w-full pl-9">
+              <div className="w-full pl-8">
                 <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-800/60 text-xs text-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
                   <div className="flex items-start gap-2.5">
                     <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
@@ -1057,9 +731,8 @@ export const ChatPage: React.FC = () => {
             <div ref={messagesEndRef} />
           </div>
         ) : (
-          /* ChatGPT Empty State ("New Chat" Screen) */
+          /* Empty State ("New Chat" Screen) */
           <div className="h-full flex flex-col items-center justify-center px-4 max-w-2xl mx-auto text-center space-y-7 -mt-10">
-            {/* Greeting Icon & Heading */}
             <div className="space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-rose-600/10 border border-rose-500/20 flex items-center justify-center mx-auto text-rose-400 shadow-lg">
                 <Sparkles className="w-7 h-7" />
@@ -1072,7 +745,7 @@ export const ChatPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Prompt Suggestion Cards (2x2 Grid) */}
+            {/* 2x2 Prompt Suggestions Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
               {PROMPT_SUGGESTIONS.map((item, idx) => {
                 const Icon = item.icon;
@@ -1080,7 +753,7 @@ export const ChatPage: React.FC = () => {
                   <button
                     key={idx}
                     onClick={() => handleSendMessage(item.prompt)}
-                    className="p-4 rounded-2xl border border-[#333333] bg-[#282828]/70 hover:bg-[#2f2f2f] transition-all group flex flex-col justify-between cursor-pointer shadow-sm text-left"
+                    className="p-4 rounded-xl border border-[#333333] bg-[#262626] hover:bg-[#2d2d2d] hover:border-[#4d4d4d] transition-all group flex flex-col justify-between cursor-pointer shadow-sm text-left"
                   >
                     <div className="flex items-center gap-2 mb-1.5">
                       <Icon className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
@@ -1095,127 +768,83 @@ export const ChatPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Floating "Scroll to bottom" button when user scrolled up */}
+        {userScrolledUp && hasMessages && (
+          <button
+            onClick={() => scrollToBottom(true)}
+            className="fixed bottom-28 right-6 z-30 p-2.5 rounded-full bg-[#2c2c2c] hover:bg-[#383838] border border-[#444444] text-[#ececec] shadow-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+            title="Scroll to bottom"
+          >
+            <ArrowDown className="w-4 h-4" />
+            <span className="hidden sm:inline">Latest</span>
+          </button>
+        )}
       </div>
 
-      {/* Floating Bottom Input Pill (ChatGPT Style) */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#212121] via-[#212121]/95 to-transparent pt-6 pb-4 px-4 z-20">
-        <div className="max-w-3xl mx-auto w-full">
-          {/* Capsule Container */}
-          <div className="rounded-[28px] bg-[#2f2f2f] border border-[#383838] focus-within:border-[#555] shadow-2xl p-2 flex flex-col transition-all">
-            {/* Textarea */}
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder={`Ask anything in ${activeModeObj.name} mode...`}
-              className="w-full bg-transparent text-[#ececec] placeholder:text-[#8e8e8e] text-[15px] px-3 pt-1.5 pb-1 resize-none outline-none max-h-52 overflow-y-auto leading-relaxed"
-            />
+      {/* Floating Bottom Composer */}
+      <MessageComposer
+        inputText={inputText}
+        onChangeText={setInputText}
+        onSendMessage={handleSendMessage}
+        isStreaming={isStreaming}
+        onStopStream={handleStopStream}
+        chatMode={chatMode}
+        chatModes={CHAT_MODES}
+        onChangeChatMode={setChatMode}
+        webSearchEnabled={webSearchEnabled}
+        onToggleWebSearch={() => setWebSearchEnabled((prev) => !prev)}
+        onOpenSubjectPicker={() => setSubjectPickerOpen(true)}
+        selectedSubjectName={selectedSubject?.name}
+      />
 
-            {/* Inner Bottom Controls Toolbar */}
-            <div className="flex items-center justify-between px-2 pt-1">
-              {/* Left: Mode / Subject / SearXNG Web Search Toggle */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {/* Subject context picker */}
+      {/* Subject Context Picker Modal */}
+      {subjectPickerOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#242424] border border-[#383838] rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between border-b border-[#333] pb-2.5">
+              <h3 className="font-semibold text-white text-sm">Select Course Context</h3>
+              <button
+                onClick={() => setSubjectPickerOpen(false)}
+                className="p-1 rounded-lg text-[#8e8e8e] hover:text-white hover:bg-[#333]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-1 max-h-60 overflow-y-auto">
+              <button
+                onClick={() => {
+                  setSelectedSubjectId('');
+                  setSubjectPickerOpen(false);
+                }}
+                className={`w-full text-left p-2 rounded-lg text-xs transition-colors ${
+                  !selectedSubjectId
+                    ? 'bg-[#333333] text-white font-medium'
+                    : 'text-[#b4b4b4] hover:bg-[#2c2c2c]'
+                }`}
+              >
+                All Course Context
+              </button>
+              {subjects?.map((s: any) => (
                 <button
-                  type="button"
-                  onClick={() => setSubjectPickerOpen(true)}
-                  className="p-1.5 rounded-full hover:bg-[#3d3d3d] text-[#b4b4b4] hover:text-white transition-colors cursor-pointer"
-                  title="Filter course context"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-
-                {/* Mode Selector Pill */}
-                <button
-                  type="button"
+                  key={s.id}
                   onClick={() => {
-                    const idx = CHAT_MODES.findIndex((m) => m.id === chatMode);
-                    const next = CHAT_MODES[(idx + 1) % CHAT_MODES.length];
-                    setChatMode(next.id);
+                    setSelectedSubjectId(s.id);
+                    setSubjectPickerOpen(false);
                   }}
-                  className={`px-2.5 py-1 rounded-full bg-[#242424] hover:bg-[#383838] text-[11px] font-medium text-[#b4b4b4] hover:text-white border border-[#383838] transition-colors flex items-center gap-1 cursor-pointer`}
-                  title={`${activeModeObj.name}: ${activeModeObj.summary}`}
-                >
-                  <activeModeObj.icon className={`w-3 h-3 ${activeModeObj.color}`} />
-                  <span>{activeModeObj.name}</span>
-                </button>
-
-                {/* Manual SearXNG Web Search Toggle Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (chatMode !== 'web-search') {
-                      setWebSearchEnabled((prev) => !prev);
-                    }
-                  }}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all cursor-pointer ${
-                    chatMode === 'web-search' || webSearchEnabled
-                      ? 'bg-sky-600/30 border-sky-500/70 text-sky-300 shadow-sm'
-                      : 'bg-[#242424] border-[#383838] text-[#8e8e8e] hover:text-[#ececec]'
+                  className={`w-full text-left p-2 rounded-lg text-xs truncate transition-colors ${
+                    selectedSubjectId === s.id
+                      ? 'bg-[#333333] text-white font-medium'
+                      : 'text-[#b4b4b4] hover:bg-[#2c2c2c]'
                   }`}
-                  title={
-                    chatMode === 'web-search'
-                      ? 'Web Search is permanently active in Web Search Mode'
-                      : webSearchEnabled
-                      ? 'Web Search is ON (SearXNG). Click to disable.'
-                      : 'Web Search is OFF. Click to search live web via SearXNG.'
-                  }
                 >
-                  <Globe
-                    className={`w-3 h-3 ${
-                      chatMode === 'web-search' || webSearchEnabled ? 'text-sky-400' : 'text-[#8e8e8e]'
-                    }`}
-                  />
-                  <span>{chatMode === 'web-search' ? 'Web Search (Mode)' : 'Web Search'}</span>
-                  {(chatMode === 'web-search' || webSearchEnabled) && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 ml-0.5" />
-                  )}
+                  {s.name}
                 </button>
-              </div>
-
-              {/* Right: Circular Send / Stop Button */}
-              <div>
-                {isStreaming ? (
-                  <button
-                    type="button"
-                    onClick={handleStopStream}
-                    className="w-8 h-8 rounded-full bg-white text-black hover:bg-neutral-200 flex items-center justify-center cursor-pointer shadow-md transition-transform active:scale-95"
-                    title="Stop generating"
-                  >
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={!inputText.trim()}
-                    onClick={() => handleSendMessage()}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                      inputText.trim()
-                        ? 'bg-white text-black hover:bg-neutral-200 cursor-pointer shadow-md active:scale-95'
-                        : 'bg-[#424242] text-[#8e8e8e] cursor-not-allowed opacity-50'
-                    }`}
-                    title="Send prompt (Enter)"
-                  >
-                    <ArrowUp className="w-4 h-4 stroke-[2.5]" />
-                  </button>
-                )}
-              </div>
+              ))}
             </div>
           </div>
-
-          {/* Footer Disclaimer */}
-          <div className="text-center text-[11px] text-[#71717a] mt-2 select-none">
-            Ruby can make mistakes. Verify important academic citations against course texts.
-          </div>
         </div>
-      </div>
+      )}
 
       {/* Mode Discoverability Help Modal */}
       {modeHelpOpen && (
@@ -1234,7 +863,7 @@ export const ChatPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5 max-h-[70vh] overflow-y-auto pr-1">
               {CHAT_MODES.map((m) => {
                 const Icon = m.icon;
                 return (
@@ -1313,12 +942,12 @@ export const ChatPage: React.FC = () => {
                   Switch to <strong>Web Search Mode</strong> to search the internet exclusively via SearXNG without querying local course documents. Or use the <strong>Web Search</strong> toggle button in any other mode to enrich answers with live web intelligence.
                 </p>
                 <p>
-                  Web results are cited with direct links <span className="font-mono text-sky-400">[Web #1]</span> so you can jump straight to external references.
+                  Web results are cited with rich source cards and direct references.
                 </p>
               </div>
 
               <div className="p-3.5 rounded-xl bg-[#1a1a1a] border border-[#333] space-y-2">
-                <h4 className="font-semibold text-white text-sm">Claude-Style Activity Trace & AI Thinking</h4>
+                <h4 className="font-semibold text-white text-sm">Execution Activity Trace & AI Thinking</h4>
                 <p>
                   Watch real-time operational steps unfold as Ruby analyzes your query, searches course documents, executes SearXNG web queries, and validates citations. For reasoning models, the internal chain of thought streams live in a collapsible thought process box.
                 </p>
@@ -1329,7 +958,7 @@ export const ChatPage: React.FC = () => {
                 <ul className="list-disc list-inside space-y-1 text-[#b4b4b4]">
                   <li><strong>SymPy Math Engine:</strong> Solves algebraic equations, derivatives, integrals, and matrix operations.</li>
                   <li><strong>Restricted Code Sandbox:</strong> Executes Python and traces algorithm steps safely with AST reflection blocking.</li>
-                  <li><strong>OS & Network Simulators:</strong> Simulates CPU scheduling, Banker's deadlock avoidance, FIFO/LRU page replacement, IPv4 subnets, and logic gates.</li>
+                  <li><strong>OS & Network Simulators:</strong> Simulates CPU scheduling, Banker&apos;s deadlock avoidance, FIFO/LRU page replacement, IPv4 subnets, and logic gates.</li>
                   <li><strong>FSRS Spaced Repetition:</strong> Generates and schedules memory flashcards using the Free Spaced Repetition Schedule (FSRS v4).</li>
                 </ul>
               </div>
@@ -1475,7 +1104,6 @@ export const ChatPage: React.FC = () => {
                                 {bucket.remaining_percentage}% left ({bucket.used_percentage}% used)
                               </span>
                             </div>
-                            {/* Visual Progress Bar */}
                             <div className="w-full h-2 bg-[#2d2d2d] rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full transition-all duration-500 ${

@@ -39,6 +39,9 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     """Create all tables in the database."""
+    # Ensure all entity models are imported and registered on Base.metadata
+    import app.models.entities  # noqa: F401
+
     async with engine.begin() as conn:
         # Enable WAL mode and foreign keys for SQLite
         await conn.exec_driver_sql("PRAGMA journal_mode = WAL;")

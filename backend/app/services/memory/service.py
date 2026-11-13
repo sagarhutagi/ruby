@@ -426,6 +426,11 @@ class MemoryService:
             if len(statement_clean) < 8:
                 continue
 
+            # Reject isolated bare numbers (e.g. "44", "85/100", "9.2") without context
+            words = statement_clean.split()
+            if len(words) <= 2 and all(w.replace(".", "").replace("/", "").isdigit() for w in words):
+                continue
+
             # Skip questions: user queries asking for information should not be formed into memories
             # unless the question is explicitly asking Ruby to remember/store something
             is_query_format = bool(re.match(

@@ -2,9 +2,10 @@
 
 @layer base {
   :root {
-    --background: 0 0% 13%; /* #212121 ChatGPT canvas background */
-    --foreground: 0 0% 93%; /* #ececec */
-    --card: 0 0% 18%;       /* #2f2f2f */
+    --background: 0 0% 13%; /* #212121 Canvas background */
+    --foreground: 0 0% 93%; /* #ececec Text */
+    --sidebar: 0 0% 9%;     /* #171717 Sidebar background */
+    --card: 0 0% 16.5%;     /* #2a2a2a Elevated card surface */
     --card-foreground: 0 0% 93%;
     --popover: 0 0% 15%;
     --popover-foreground: 0 0% 93%;
@@ -18,7 +19,8 @@
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 22%;     /* #383838 */
+    --border: 0 0% 22%;     /* #383838 Subtle border */
+    --border-subtle: 0 0% 18.5%; /* #2f2f2f */
     --input: 0 0% 22%;
     --ring: 0 0% 50%;
     --radius: 0.75rem;
@@ -32,9 +34,11 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ChatGPT style sleek scrollbars */
+/* ChatGPT/Claude style sleek scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -43,9 +47,72 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* User Message Elevated Bubble */
+.user-msg-bubble {
+  background-color: #2a2a2a;
+  border: 1px solid #383838;
+  border-radius: 1.25rem;
+  padding: 0.85rem 1.25rem;
+  max-width: 85%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  color: #f3f3f3;
+  line-height: 1.625;
+}
+
+/* Assistant Response Container */
+.assistant-msg-container {
+  width: 100%;
+  color: #ececec;
+  line-height: 1.75;
+}
+
+/* Markdown Table Refinements */
+.ruby-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #333333;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  margin: 0.75rem 0;
+}
+.ruby-table th {
+  background-color: #282828;
+  color: #e4e4e7;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #333333;
+}
+.ruby-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #2a2a2a;
+  color: #d4d4d8;
+}
+.ruby-table tr:last-child td {
+  border-bottom: none;
+}
+.ruby-table tr:hover td {
+  background-color: #252525;
+}
+
+/* Web Source Card Grid */
+.web-sources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.625rem;
+  margin-top: 0.625rem;
+}
+
+/* Smooth transitions */
+.transition-surface {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }

@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     default_embedding_provider: str = Field(default="sentence-transformers", alias="DEFAULT_EMBEDDING_PROVIDER")
     default_embedding_model: str = Field(default="all-MiniLM-L6-v2", alias="DEFAULT_EMBEDDING_MODEL")
 
+    # Agent Engine & Execution Configuration
+    agent_context_compaction_headroom: float = Field(default=0.15, alias="AGENT_CONTEXT_COMPACTION_HEADROOM")
+    agent_token_budget: int = Field(default=4096, alias="AGENT_TOKEN_BUDGET")
+    agent_parallelism_limit: int = Field(default=4, alias="AGENT_PARALLELISM_LIMIT")
+    agent_retry_limit: int = Field(default=3, alias="AGENT_RETRY_LIMIT")
+    agent_cancellation_grace_period_seconds: float = Field(default=3.0, alias="AGENT_CANCELLATION_GRACE_PERIOD_SECONDS")
+    agent_approval_timeout_seconds: float = Field(default=120.0, alias="AGENT_APPROVAL_TIMEOUT_SECONDS")
+
     def ensure_directories(self) -> None:
         """Create all required data and storage directories if they do not exist."""
         base = self.data_dir.resolve()

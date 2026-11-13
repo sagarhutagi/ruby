@@ -11,6 +11,7 @@ from app.api.v1.memories import router as memories_router, memory_alias_router
 from app.api.v1.academic import router as academic_router
 from app.api.v1.graph import router as graph_router
 from app.api.v1.analytics import router as analytics_router
+from app.api.v1.permissions import router as permissions_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(health_router)
@@ -26,6 +27,7 @@ api_v1_router.include_router(memory_alias_router)
 api_v1_router.include_router(academic_router)
 api_v1_router.include_router(graph_router)
 api_v1_router.include_router(analytics_router)
+api_v1_router.include_router(permissions_router)
 
 
 

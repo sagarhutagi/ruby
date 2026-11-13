@@ -1418,6 +1418,40 @@ export function getDiagnosticExportUrl(): string {
   return `${API_BASE}/analytics/diagnostics/export`;
 }
 
+export interface PermissionRequestItem {
+  request_id: string;
+  action: string;
+  resource: string;
+  tool_name: string;
+  arguments: Record<string, any>;
+  description: string;
+  created_at: number;
+}
+
+export async function fetchPendingPermissions(): Promise<PermissionRequestItem[]> {
+  const res = await fetch(`${API_BASE}/permissions/pending`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function replyPermission(
+  requestId: string,
+  approved: boolean,
+  remember: boolean = false
+): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/permissions/reply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      request_id: requestId,
+      approved,
+      remember,
+    }),
+  });
+  return res.ok;
+}
+
+
 
 
 

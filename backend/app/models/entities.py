@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional, List
 from sqlalchemy import (
-    String, Text, Integer, Float, Boolean, ForeignKey, Index, JSON
+    String, Text, Integer, Float, Boolean, ForeignKey, Index, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.session import Base
@@ -296,3 +296,96 @@ class AppSetting(Base, TimestampMixin):
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str] = mapped_column(String(50), default="general", nullable=False)
+
+
+class AgentTask(Base, TimestampMixin):
+    __tablename__ = "agent_tasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    conversation_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    parent_task_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("agent_tasks.id", ondelete="CASCADE"), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    mode: Mapped[str] = mapped_column(String(50), default="auto", nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)  # pending, ready, running, paused, waiting_approval, completed, failed, cancelled
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_retries: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    tool_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    tool_arguments: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    execution_time_ms: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    subtasks: Mapped[List["AgentTask"]] = relationship("AgentTask", cascade="all, delete-orphan")
+
+
+class AgentTaskDependency(Base, TimestampMixin):
+    __tablename__ = "agent_task_dependencies"
+    __table_args__ = (
+        UniqueConstraint("task_id", "depends_on_task_id", name="uq_task_dependency"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    task_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_tasks.id", ondelete="CASCADE"), nullable=False)
+    depends_on_task_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_tasks.id", ondelete="CASCADE"), nullable=False)
+
+
+class AcademicRecord(Base, TimestampMixin):
+    __tablename__ = "academic_records"
+    __table_args__ = (
+        UniqueConstraint("user_id", "subject_code", "term", "assessment_type", name="uq_academic_record_entry"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String(100), default="default_user", nullable=False)
+    institution: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    term: Mapped[str] = mapped_column(String(50), default="Current", nullable=False)  # Semester 5, Fall 2026, etc.
+    subject_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # CS301, UE21CS341AB, etc.
+    subject_name: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)  # Computer Networks, etc.
+    assessment_type: Mapped[str] = mapped_column(String(100), default="assessment", nullable=False)  # ISA 1, ISA 2, ESA, assignment, practical, etc.
+    marks_obtained: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Can be 0.0, or None if pending/absent
+    max_marks: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    result_status: Mapped[str] = mapped_column(String(30), default="available", nullable=False)  # available, pending, absent, not_applicable
+    assessment_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    weight: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    grade: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    provenance: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    record_type: Mapped[str] = mapped_column(String(50), default="assessment", nullable=False)  # assessment, cgpa, gpa, attendance
+
+    # Backward-compatible property aliases
+    @property
+    def score(self) -> Optional[float]:
+        return self.marks_obtained
+
+    @score.setter
+    def score(self, val: Optional[float]) -> None:
+        self.marks_obtained = val
+
+    @property
+    def max_score(self) -> Optional[float]:
+        return self.max_marks
+
+    @max_score.setter
+    def max_score(self, val: Optional[float]) -> None:
+        self.max_marks = val
+
+    @property
+    def component(self) -> str:
+        return self.assessment_type
+
+    @component.setter
+    def component(self, val: str) -> None:
+        self.assessment_type = val
+
+    @property
+    def raw_source(self) -> Optional[str]:
+        return self.source
+
+    @raw_source.setter
+    def raw_source(self, val: Optional[str]) -> None:
+        self.source = val
+
+

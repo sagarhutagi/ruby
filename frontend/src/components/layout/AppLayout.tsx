@@ -10,6 +10,11 @@ import {
   updateConversation,
 } from '../../services/api';
 
+export interface LayoutContextType {
+  isSidebarOpen: boolean;
+  onToggleSidebar: () => void;
+}
+
 export const AppLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -69,17 +74,19 @@ export const AppLayout: React.FC = () => {
         onRenameConversation={(id, title) => updateTitleMutation.mutate({ id, title })}
       />
       <div className="flex flex-col flex-1 h-screen overflow-hidden bg-[#212121]">
-        <Header
-          health={health}
-          isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-        />
+        {!isChat && (
+          <Header
+            health={health}
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          />
+        )}
         <main
           className={`flex-1 overflow-hidden bg-[#212121] ${
             isChat ? 'p-0 flex flex-col' : 'overflow-y-auto p-6'
           }`}
         >
-          <Outlet />
+          <Outlet context={{ isSidebarOpen, onToggleSidebar: () => setIsSidebarOpen((prev) => !prev) }} />
         </main>
       </div>
     </div>
