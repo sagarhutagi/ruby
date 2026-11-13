@@ -512,4 +512,134 @@ export function streamChat(
   return () => controller.abort();
 }
 
+// Memory API
+export interface MemoryItem {
+  id: string;
+  memory_type: 'working' | 'episodic' | 'semantic' | 'profile' | 'procedural' | string;
+  content: string;
+  importance_score: number;
+  confidence: number;
+  is_pinned: boolean;
+  status: string;
+  source_conversation_id?: string | null;
+  source_event?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuditEventItem {
+  id: string;
+  memory_id: string;
+  action: string;
+  details?: any | null;
+  created_at: string;
+}
+
+export async function fetchMemories(params?: {
+  memory_type?: string;
+  status?: string;
+  is_pinned?: boolean;
+  q?: string;
+}): Promise<MemoryItem[]> {
+  const query = new URLSearchParams();
+  if (params?.memory_type) query.append('memory_type', params.memory_type);
+  if (params?.status) query.append('status', params.status);
+  if (params?.is_pinned !== undefined) query.append('is_pinned', String(params.is_pinned));
+  if (params?.q) query.append('q', params.q);
+
+  const res = await fetch(`${API_BASE}/memories?${query.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch memories');
+  return res.json();
+}
+
+export async function createMemory(data: {
+  content: string;
+  memory_type: string;
+  importance_score?: number;
+  confidence?: number;
+  is_pinned?: boolean;
+}): Promise<MemoryItem> {
+  const res = await fetch(`${API_BASE}/memories`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to create memory');
+  return res.json();
+}
+
+export async function updateMemory(
+  id: string,
+  data: Partial<MemoryItem>
+): Promise<MemoryItem> {
+  const res = await fetch(`${API_BASE}/memories/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to update memory');
+  return res.json();
+}
+
+export async function deleteMemory(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/memories/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete memory');
+}
+
+export async function togglePinMemory(id: string): Promise<MemoryItem> {
+  const res = await fetch(`${API_BASE}/memories/${id}/pin`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to toggle pin memory');
+  return res.json();
+}
+
+export async function searchMemories(
+  query: string,
+  memory_types?: string[],
+  top_k?: number
+): Promise<{ memory: MemoryItem; similarity: number; distance: number }[]> {
+  const res = await fetch(`${API_BASE}/memories/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, memory_types, top_k }),
+  });
+  if (!res.ok) throw new Error('Memory search failed');
+  return res.json();
+}
+
+export async function extractMemoryCandidates(text: string): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/memories/extract-candidates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error('Candidate extraction failed');
+  return res.json();
+}
+
+export async function fetchMemoryAuditTrail(memory_id?: string): Promise<AuditEventItem[]> {
+  const url = memory_id
+    ? `${API_BASE}/memories/audit/trail?memory_id=${memory_id}`
+    : `${API_BASE}/memories/audit/trail`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to fetch audit trail');
+  return res.json();
+}
+
+export async function exportMemories(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/memories/export`);
+  if (!res.ok) throw new Error('Failed to export memories');
+  return res.json();
+}
+
+export async function importMemories(items: any[]): Promise<{ imported_count: number }> {
+  const res = await fetch(`${API_BASE}/memories/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(items),
+  });
+  if (!res.ok) throw new Error('Failed to import memories');
+  return res.json();
+}
+
+
 

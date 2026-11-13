@@ -132,19 +132,19 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 7 --- Memory subsystem
-- [ ] Define working, episodic, semantic, profile, and procedural memory schemas.
-- [ ] Implement candidate memory extraction.
-- [ ] Implement importance scoring.
-- [ ] Implement duplicate detection.
-- [ ] Implement contradiction handling.
-- [ ] Implement configurable memory approval policy.
-- [ ] Implement consolidation and semantic retrieval.
-- [ ] Implement memory provenance links to conversations/events.
-- [ ] Implement edit, pin, and delete actions.
-- [ ] Ensure deleting a memory purges all derived and vector indexes.
-- [ ] Implement memory audit log.
-- [ ] Build Memory Manager UI.
-- [ ] Test memory lifecycle, scoring, and deletion.
+- [x] Define working, episodic, semantic, profile, and procedural memory schemas.
+- [x] Implement candidate memory extraction.
+- [x] Implement importance scoring.
+- [x] Implement duplicate detection.
+- [x] Implement contradiction handling.
+- [x] Implement configurable memory approval policy.
+- [x] Implement consolidation and semantic retrieval.
+- [x] Implement memory provenance links to conversations/events.
+- [x] Implement edit, pin, and delete actions.
+- [x] Ensure deleting a memory purges all derived and vector indexes.
+- [x] Implement memory audit log.
+- [x] Build Memory Manager UI.
+- [x] Test memory lifecycle, scoring, and deletion.
 
 **Acceptance criteria:** Memories persist independently of chat history, can be inspected and edited, and deletion removes searchable derived representations.
 

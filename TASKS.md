@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 6 (Chat Experience) -> Complete. Beginning Phase 7 (Memory Subsystem)
+- **Current Phase:** Phase 7 (Memory Subsystem) -> Complete. Beginning Phase 8 (Academic Learning Tools)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -79,11 +79,12 @@
 - [x] Chat tests.
 
 ### Phase 7: Memory Subsystem
-- [ ] 5-tier memory models (Working, Episodic, Semantic, Profile, Procedural).
-- [ ] Candidate extraction and importance scoring.
-- [ ] Memory consolidation, deduplication, and contradiction resolution.
-- [ ] Memory manager UI with editing, pinning, and deletion.
-- [ ] Memory unit tests.
+- [x] 5-tier memory models (Working, Episodic, Semantic, Profile, Procedural).
+- [x] Candidate extraction and importance scoring.
+- [x] Memory consolidation, deduplication, and contradiction resolution.
+- [x] Memory manager UI with editing, pinning, and deletion.
+- [x] Memory unit tests.
+
 
 ### Phase 8: Academic Learning Tools
 - [ ] Concept explainer with difficulty levels.
