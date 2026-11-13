@@ -42,25 +42,48 @@ async def index_chunk_fts(
 
 
 async def search_fts(
-    session: AsyncSession, query_str: str, limit: int = 10
+    session: AsyncSession,
+    query_str: str,
+    limit: int = 10,
+    document_ids: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Query FTS5 using BM25 ranking."""
+    """Query FTS5 using BM25 ranking, optionally filtering by document_ids."""
     # Sanitize query string for FTS5 syntax
     sanitized = "".join(c for c in query_str if c.isalnum() or c.isspace()).strip()
     if not sanitized:
         return []
 
-    # Use MATCH with bm25 ranking
+    # Format multi-word query into OR or AND match for robust retrieval
+    # In FTS5, terms separated by spaces match exact conjunction. Let's keep spaces or OR logic.
+    query_terms = [t for t in sanitized.split() if len(t) > 1]
+    if not query_terms:
+        match_expr = sanitized
+    else:
+        # Match any of the key terms (OR) with higher weight for all terms
+        match_expr = " OR ".join(query_terms)
+
+    params: Dict[str, Any] = {"query": match_expr, "limit": limit}
+
+    if document_ids:
+        # Generate parameterised IN clause
+        placeholders = [f":doc_{i}" for i in range(len(document_ids))]
+        for i, doc_id in enumerate(document_ids):
+            params[f"doc_{i}"] = doc_id
+        doc_filter = f"AND document_id IN ({', '.join(placeholders)})"
+    else:
+        doc_filter = ""
+
     sql = text(
-        """
+        f"""
         SELECT chunk_id, document_id, bm25(chunk_fts) as rank, snippet(chunk_fts, 2, '<b>', '</b>', '...', 32) as match_snippet
         FROM chunk_fts
         WHERE chunk_fts MATCH :query
+        {doc_filter}
         ORDER BY rank
         LIMIT :limit;
         """
     )
-    result = await session.execute(sql, {"query": sanitized, "limit": limit})
+    result = await session.execute(sql, params)
     rows = result.fetchall()
     return [
         {
@@ -71,6 +94,7 @@ async def search_fts(
         }
         for row in rows
     ]
+
 
 
 async def delete_document_fts(session: AsyncSession, document_id: str) -> None:

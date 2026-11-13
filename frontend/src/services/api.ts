@@ -252,3 +252,95 @@ export async function fetchJobStatus(jobId: string): Promise<IngestionJobStatus>
   if (!res.ok) throw new Error('Failed to fetch job status');
   return res.json();
 }
+
+// Retrieval & RAG API
+export interface RetrievedChunk {
+  chunk_id: string;
+  document_id: string;
+  document_title: string;
+  content: string;
+  token_count: number;
+  page_number?: number | null;
+  slide_number?: number | null;
+  sheet_name?: string | null;
+  cell_range?: string | null;
+  section_heading?: string | null;
+  dense_rank?: number | null;
+  sparse_rank?: number | null;
+  dense_score: number;
+  sparse_score: number;
+  rrf_score: number;
+  matched_by: 'both' | 'dense' | 'sparse' | string;
+  snippet?: string | null;
+}
+
+export interface HybridRetrievalResult {
+  query: string;
+  expanded_query?: string | null;
+  total_found: number;
+  dense_count: number;
+  sparse_count: number;
+  dense_latency_ms: number;
+  sparse_latency_ms: number;
+  total_latency_ms: number;
+  chunks: RetrievedChunk[];
+}
+
+export interface RetrievalInspectResponse {
+  query: string;
+  expanded_query?: string | null;
+  total_found: number;
+  dense_count: number;
+  sparse_count: number;
+  dense_latency_ms: number;
+  sparse_latency_ms: number;
+  total_latency_ms: number;
+  fused_chunks: RetrievedChunk[];
+  sample_context: string;
+}
+
+export async function executeHybridSearch(params: {
+  query: string;
+  top_k?: number;
+  subject_id?: string;
+  document_ids?: string[];
+  dense_weight?: number;
+  sparse_weight?: number;
+}): Promise<HybridRetrievalResult> {
+  const res = await fetch(`${API_BASE}/retrieval/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error('Hybrid search failed');
+  return res.json();
+}
+
+export async function inspectRetrieval(params: {
+  query: string;
+  top_k?: number;
+  subject_id?: string;
+  document_ids?: string[];
+  dense_weight?: number;
+  sparse_weight?: number;
+}): Promise<RetrievalInspectResponse> {
+  const res = await fetch(`${API_BASE}/retrieval/inspect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error('Retrieval inspect failed');
+  return res.json();
+}
+
+export async function fetchRetrievalStats(): Promise<{
+  chroma: { collection_name: string; persist_dir: string; total_chunks: number };
+  embedding_provider: string;
+  embedding_model: string;
+  dimension: number;
+}> {
+  const res = await fetch(`${API_BASE}/retrieval/stats`);
+  if (!res.ok) throw new Error('Failed to fetch retrieval stats');
+  return res.json();
+}
+

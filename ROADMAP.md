@@ -93,22 +93,22 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 5 --- Embeddings and RAG
-- [ ] Implement embedding provider interface.
-- [ ] Integrate local embedding models (Sentence Transformers / BGE / nomic).
-- [ ] Implement structure-aware and recursive chunking.
-- [ ] Configure persistent ChromaDB storage.
-- [ ] Configure SQLite FTS5 for keyword search.
-- [ ] Implement dense vector retrieval.
-- [ ] Implement BM25 keyword retrieval.
-- [ ] Implement hybrid ranking (Reciprocal Rank Fusion - RRF).
-- [ ] Implement optional reranking.
-- [ ] Implement metadata and subject filtering.
-- [ ] Implement query rewriting.
-- [ ] Implement context assembly.
-- [ ] Preserve source provenance end-to-end.
-- [ ] Implement citation validation.
-- [ ] Implement retrieval diagnostics inspector.
-- [ ] Add RAG evaluation dataset and verification tests.
+- [x] Implement embedding provider interface.
+- [x] Integrate local embedding models (Sentence Transformers / BGE / nomic / LocalDense).
+- [x] Implement structure-aware and recursive chunking.
+- [x] Configure persistent ChromaDB storage.
+- [x] Configure SQLite FTS5 for keyword search.
+- [x] Implement dense vector retrieval.
+- [x] Implement BM25 keyword retrieval.
+- [x] Implement hybrid ranking (Reciprocal Rank Fusion - RRF).
+- [x] Implement optional reranking.
+- [x] Implement metadata and subject filtering.
+- [x] Implement query rewriting.
+- [x] Implement context assembly.
+- [x] Preserve source provenance end-to-end.
+- [x] Implement citation validation.
+- [x] Implement retrieval diagnostics inspector.
+- [x] Add RAG evaluation dataset and verification tests.
 
 **Acceptance criteria:** A question over imported documents retrieves relevant chunks and produces verifiable citations. Missing evidence is reported rather than invented.
 

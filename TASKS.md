@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 4 (Document Ingestion and Library) -> Complete. Beginning Phase 5 (Embeddings and RAG)
+- **Current Phase:** Phase 5 (Embeddings & RAG) -> Complete. Beginning Phase 6 (Chat Experience)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -62,13 +62,14 @@
 - [x] Comprehensive parser unit tests using representative test fixtures.
 
 ### Phase 5: Embeddings & RAG
-- [ ] Embedding adapter and local SentenceTransformers/ChromaDB store.
-- [ ] Structure-aware semantic chunking.
-- [ ] SQLite FTS5 full-text keyword indexing.
-- [ ] Hybrid search with Reciprocal Rank Fusion (RRF).
-- [ ] End-to-end citation provenance verification.
-- [ ] Retrieval diagnostics panel.
-- [ ] RAG evaluation tests.
+- [x] Embedding adapter and local SentenceTransformers/ChromaDB store.
+- [x] Structure-aware semantic chunking.
+- [x] SQLite FTS5 full-text keyword indexing.
+- [x] Hybrid search with Reciprocal Rank Fusion (RRF).
+- [x] End-to-end citation provenance verification.
+- [x] Retrieval diagnostics panel.
+- [x] RAG evaluation tests.
+
 
 ### Phase 6: Chat Experience
 - [ ] SQLite conversation and message persistence.

@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.database.session import get_db
 from app.models.entities import Document, DocumentChunk, IngestionJob
 from app.database.fts import delete_document_fts
+from app.services.retrieval.chroma_store import chroma_store
 from app.workers.ingestion import process_ingestion_job
 from app.schemas.document import (
     DocumentUploadResponse,
@@ -211,8 +212,9 @@ async def delete_document(document_id: str, db: AsyncSession = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
-    # Remove FTS5 keyword index entries
+    # Remove FTS5 keyword index entries & ChromaDB vector index entries
     await delete_document_fts(db, document_id)
+    chroma_store.delete_by_document(document_id)
 
     # Delete physical file
     try:
