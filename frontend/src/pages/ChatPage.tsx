@@ -30,6 +30,8 @@ import {
   ExternalLink,
   RefreshCw,
   AlertCircle,
+  Brain,
+  Loader2,
 } from 'lucide-react';
 import {
   fetchConversation,
@@ -63,9 +65,18 @@ const CHAT_MODES = [
     whenToUse: 'Use when studying exam notes, preparing for tests, or verifying course material.',
   },
   {
+    id: 'web-search',
+    name: 'Web Search',
+    icon: Globe,
+    color: 'text-sky-400',
+    borderColor: 'border-sky-500/40',
+    summary: 'Searches the live web exclusively via SearXNG without querying local course documents.',
+    whenToUse: 'Use for current events, online documentation, latest library updates, and real-time external info.',
+  },
+  {
     id: 'general',
     name: 'General',
-    icon: Globe,
+    icon: Compass,
     color: 'text-blue-400',
     borderColor: 'border-blue-500/40',
     summary: 'Answers using broad academic AI knowledge without consulting your uploaded documents.',
@@ -130,6 +141,9 @@ export const ChatPage: React.FC = () => {
   const [streamingText, setStreamingText] = useState('');
   const [streamingSources, setStreamingSources] = useState<any[]>([]);
   const [streamingWebSources, setStreamingWebSources] = useState<any[]>([]);
+  const [streamingSteps, setStreamingSteps] = useState<any[]>([]);
+  const [streamingThinking, setStreamingThinking] = useState<string>('');
+  const [isLiveThinkingExpanded, setIsLiveThinkingExpanded] = useState<boolean>(true);
   const [isSearchingWeb, setIsSearchingWeb] = useState(false);
   const [webSearchQuery, setWebSearchQuery] = useState('');
   const [abortStream, setAbortStream] = useState<(() => void) | null>(null);
@@ -141,6 +155,7 @@ export const ChatPage: React.FC = () => {
   // Modals & Panels
   const [selectedCitationChunk, setSelectedCitationChunk] = useState<any | null>(null);
   const [expandedDiagnostics, setExpandedDiagnostics] = useState<Record<string, boolean>>({});
+  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [subjectPickerOpen, setSubjectPickerOpen] = useState(false);
@@ -232,6 +247,9 @@ export const ChatPage: React.FC = () => {
     setStreamingText('');
     setStreamingSources([]);
     setStreamingWebSources([]);
+    setStreamingSteps([]);
+    setStreamingThinking('');
+    setIsLiveThinkingExpanded(true);
     setIsSearchingWeb(false);
     setWebSearchQuery('');
 
@@ -241,7 +259,7 @@ export const ChatPage: React.FC = () => {
         content: textToSend,
         mode: chatMode,
         subject_id: selectedSubjectId || undefined,
-        web_search: webSearchEnabled,
+        web_search: webSearchEnabled || chatMode === 'web-search',
       },
       {
         onSources: (chunks) => {
@@ -258,6 +276,20 @@ export const ChatPage: React.FC = () => {
         onWebSearchError: () => {
           setIsSearchingWeb(false);
         },
+        onStep: (step) => {
+          setStreamingSteps((prev) => {
+            const idx = prev.findIndex((s) => s.id === step.id);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = step;
+              return next;
+            }
+            return [...prev, step];
+          });
+        },
+        onThinkToken: (thinkToken) => {
+          setStreamingThinking((prev) => prev + thinkToken);
+        },
         onToken: (token) => {
           setStreamingText((prev) => prev + token);
         },
@@ -266,6 +298,8 @@ export const ChatPage: React.FC = () => {
           setStreamingText('');
           setStreamingSources([]);
           setStreamingWebSources([]);
+          setStreamingSteps([]);
+          setStreamingThinking('');
           setIsSearchingWeb(false);
           setOptimisticUserMsg(null);
           refetchCurrentConv();
@@ -514,6 +548,107 @@ export const ChatPage: React.FC = () => {
 
                       {/* Content */}
                       <div className="pl-9 text-[15px] leading-7 text-[#ececec]">
+                        {/* Claude-Style Thinking & Activity Trace */}
+                        {(() => {
+                          const steps = msg.diagnostics?.steps || [];
+                          const thinkingContent = msg.diagnostics?.thinking_content || '';
+                          const hasSteps = steps.length > 0;
+                          const hasThinking = !!thinkingContent;
+                          if (!hasSteps && !hasThinking) return null;
+
+                          const isExpanded = !!expandedSteps[msg.id];
+
+                          return (
+                            <div className="mb-3.5">
+                              <button
+                                onClick={() =>
+                                  setExpandedSteps((prev) => ({
+                                    ...prev,
+                                    [msg.id]: !prev[msg.id],
+                                  }))
+                                }
+                                className="flex items-center gap-2 text-xs font-medium text-[#b4b4b4] hover:text-white bg-[#262626] hover:bg-[#2e2e2e] px-3 py-1.5 rounded-xl border border-[#383838] transition-all cursor-pointer shadow-sm group"
+                              >
+                                <Brain className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition-transform" />
+                                <span>
+                                  {hasThinking ? 'Thought Process & Steps' : 'Execution Activity Trace'}
+                                  {steps.length > 0 ? ` (${steps.length} steps)` : ''}
+                                </span>
+                                {isExpanded ? (
+                                  <ChevronUp className="w-3.5 h-3.5 text-[#888]" />
+                                ) : (
+                                  <ChevronDown className="w-3.5 h-3.5 text-[#888]" />
+                                )}
+                              </button>
+
+                              {isExpanded && (
+                                <div className="mt-2.5 p-3.5 rounded-2xl bg-[#191919] border border-[#333] space-y-3 shadow-inner">
+                                  {/* Stepper Timeline */}
+                                  {steps.length > 0 && (
+                                    <div className="space-y-2.5 text-xs">
+                                      {steps.map((st: any) => (
+                                        <div key={st.id} className="flex items-start gap-2.5">
+                                          {st.status === 'completed' ? (
+                                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                          ) : st.status === 'failed' ? (
+                                            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                          ) : (
+                                            <Loader2 className="w-4 h-4 text-rose-400 animate-spin shrink-0 mt-0.5" />
+                                          )}
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span className="font-semibold text-[#f0f0f0]">{st.label}</span>
+                                              <span className="text-[10px] font-mono text-[#888] uppercase">{st.status}</span>
+                                            </div>
+                                            {st.description && (
+                                              <p className="text-[#a1a1aa] mt-0.5 leading-relaxed">{st.description}</p>
+                                            )}
+                                            {st.details && Array.isArray(st.details) && (
+                                              <div className="mt-1.5 pl-2.5 border-l-2 border-[#383838] space-y-1">
+                                                {st.details.map((d: any, idx: number) => (
+                                                  <div key={idx} className="text-[11px] text-[#93c5fd] truncate flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
+                                                    {typeof d === 'string' ? (
+                                                      d
+                                                    ) : (
+                                                      <a
+                                                        href={d.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="hover:underline flex items-center gap-1"
+                                                      >
+                                                        <span>{d.title}</span>
+                                                        <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                                                      </a>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* AI Internal Thought Box */}
+                                  {hasThinking && (
+                                    <div className="pt-2.5 border-t border-[#2d2d2d]">
+                                      <div className="text-[11px] font-mono text-rose-300 mb-1.5 flex items-center gap-1.5">
+                                        <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+                                        <span>Internal Chain of Thought:</span>
+                                      </div>
+                                      <div className="p-3 rounded-xl bg-[#141414] border border-[#282828] text-xs font-mono text-[#a1a1aa] whitespace-pre-wrap leading-relaxed max-h-56 overflow-y-auto select-text shadow-inner">
+                                        {thinkingContent}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         <MarkdownRenderer
                           content={msg.content}
                           onCitationClick={(tag) => {
@@ -667,43 +802,129 @@ export const ChatPage: React.FC = () => {
             {isStreaming && (
               <div className="w-full space-y-3">
                 <div className="flex items-center gap-2.5 text-xs text-[#8e8e8e]">
-                  <div className="w-7 h-7 rounded-full bg-[#343541] border border-indigo-500/50 flex items-center justify-center text-rose-400 font-bold text-xs animate-pulse">
+                  <div className="w-7 h-7 rounded-full bg-[#343541] border border-rose-500/50 flex items-center justify-center text-rose-400 font-bold text-xs animate-pulse">
                     <Sparkles className="w-4 h-4 text-rose-400" />
                   </div>
                   <span className="font-medium text-white text-sm">Ruby</span>
-                  <span className="text-rose-400 animate-pulse font-mono">• Formulating response</span>
-
-                  {/* Web Search Live Searching Indicator */}
-                  {isSearchingWeb && (
-                    <span className="flex items-center gap-1 text-blue-400 bg-blue-950/60 border border-blue-800/60 px-2 py-0.5 rounded-full text-[11px] animate-pulse">
-                      <Globe className="w-3 h-3 animate-spin" />
-                      Searching web via SearXNG...
-                    </span>
-                  )}
-
+                  <span className="text-rose-400 animate-pulse font-mono">• Generating response</span>
                   {streamingSources.length > 0 && (
                     <span className="text-[11px] font-mono text-[#a1a1aa]">
                       ({streamingSources.length} document chunks)
                     </span>
                   )}
                   {streamingWebSources.length > 0 && (
-                    <span className="text-[11px] font-mono text-blue-400">
+                    <span className="text-[11px] font-mono text-sky-400">
                       ({streamingWebSources.length} web sources)
                     </span>
                   )}
                 </div>
 
-                <div className="pl-9 text-[15px] leading-7 text-[#ececec]">
-                  {streamingText ? (
-                    <MarkdownRenderer content={streamingText} />
-                  ) : (
-                    <div className="text-sm text-[#8e8e8e] animate-pulse flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-rose-400" />
-                      {isSearchingWeb
-                        ? `Querying SearXNG for "${webSearchQuery}"...`
-                        : 'Retrieving evidence & formulating academic answer...'}
+                {/* Claude-style Live Activity Stepper & Thinking Box */}
+                <div className="pl-9 space-y-3">
+                  {(streamingSteps.length > 0 || isSearchingWeb || !!streamingThinking) && (
+                    <div className="rounded-2xl bg-[#191919] border border-[#333] p-3.5 space-y-3 shadow-lg">
+                      <div className="flex items-center justify-between text-xs text-[#b4b4b4] pb-2 border-b border-[#2e2e2e]">
+                        <div className="flex items-center gap-2">
+                          <Brain className="w-4 h-4 text-rose-400 animate-pulse" />
+                          <span className="font-semibold text-white">Live Activity Trace & Thinking</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-950/80 text-rose-300 border border-rose-800/60 animate-pulse">
+                            In Progress
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setIsLiveThinkingExpanded((prev) => !prev)}
+                          className="text-[#888] hover:text-white transition-colors cursor-pointer"
+                        >
+                          {isLiveThinkingExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                      </div>
+
+                      {isLiveThinkingExpanded && (
+                        <div className="space-y-3">
+                          {/* Stepper items */}
+                          {streamingSteps.length > 0 && (
+                            <div className="space-y-2 text-xs">
+                              {streamingSteps.map((st: any) => (
+                                <div key={st.id} className="flex items-start gap-2.5">
+                                  {st.status === 'running' ? (
+                                    <Loader2 className="w-4 h-4 text-rose-400 animate-spin shrink-0 mt-0.5" />
+                                  ) : st.status === 'completed' ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                  ) : (
+                                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-semibold text-[#f0f0f0]">{st.label}</span>
+                                      <span className="text-[10px] font-mono text-[#888] uppercase">{st.status}</span>
+                                    </div>
+                                    {st.description && (
+                                      <p className="text-[#a1a1aa] mt-0.5 leading-relaxed">{st.description}</p>
+                                    )}
+                                    {st.details && Array.isArray(st.details) && (
+                                      <div className="mt-1 pl-2.5 border-l-2 border-[#383838] space-y-1">
+                                        {st.details.map((d: any, idx: number) => (
+                                          <div key={idx} className="text-[11px] text-[#93c5fd] truncate flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
+                                            {typeof d === 'string' ? (
+                                              d
+                                            ) : (
+                                              <a
+                                                href={d.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="hover:underline flex items-center gap-1"
+                                              >
+                                                <span>{d.title}</span>
+                                                <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                                              </a>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Live Web Search Querying Banner */}
+                          {isSearchingWeb && (
+                            <div className="flex items-center gap-2 text-xs text-blue-400 bg-blue-950/40 border border-blue-800/60 p-2.5 rounded-xl animate-pulse">
+                              <Globe className="w-4 h-4 animate-spin shrink-0 text-blue-400" />
+                              <span>Querying SearXNG live web index for: &quot;{webSearchQuery}&quot;...</span>
+                            </div>
+                          )}
+
+                          {/* Live Streaming Thoughts (Internal chain of thought) */}
+                          {streamingThinking && (
+                            <div className="pt-2 border-t border-[#2e2e2e]">
+                              <div className="text-[11px] font-mono text-rose-300 mb-1.5 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                                <span>Live AI Thinking Stream:</span>
+                              </div>
+                              <div className="p-3 rounded-xl bg-[#141414] border border-[#282828] text-xs font-mono text-[#a1a1aa] whitespace-pre-wrap leading-relaxed max-h-52 overflow-y-auto select-text shadow-inner">
+                                {streamingThinking}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
+
+                  {/* Main Streaming Output */}
+                  <div className="text-[15px] leading-7 text-[#ececec]">
+                    {streamingText ? (
+                      <MarkdownRenderer content={streamingText} />
+                    ) : (
+                      <div className="text-sm text-[#8e8e8e] animate-pulse flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-rose-400" />
+                        <span>Formulating academic response...</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -826,21 +1047,33 @@ export const ChatPage: React.FC = () => {
                 {/* Manual SearXNG Web Search Toggle Button */}
                 <button
                   type="button"
-                  onClick={() => setWebSearchEnabled((prev) => !prev)}
+                  onClick={() => {
+                    if (chatMode !== 'web-search') {
+                      setWebSearchEnabled((prev) => !prev);
+                    }
+                  }}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all cursor-pointer ${
-                    webSearchEnabled
-                      ? 'bg-blue-600/30 border-blue-500/70 text-blue-300 shadow-sm'
+                    chatMode === 'web-search' || webSearchEnabled
+                      ? 'bg-sky-600/30 border-sky-500/70 text-sky-300 shadow-sm'
                       : 'bg-[#242424] border-[#383838] text-[#8e8e8e] hover:text-[#ececec]'
                   }`}
                   title={
-                    webSearchEnabled
+                    chatMode === 'web-search'
+                      ? 'Web Search is permanently active in Web Search Mode'
+                      : webSearchEnabled
                       ? 'Web Search is ON (SearXNG). Click to disable.'
                       : 'Web Search is OFF. Click to search live web via SearXNG.'
                   }
                 >
-                  <Globe className={`w-3 h-3 ${webSearchEnabled ? 'text-blue-400' : 'text-[#8e8e8e]'}`} />
-                  <span>Web Search</span>
-                  {webSearchEnabled && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 ml-0.5" />}
+                  <Globe
+                    className={`w-3 h-3 ${
+                      chatMode === 'web-search' || webSearchEnabled ? 'text-sky-400' : 'text-[#8e8e8e]'
+                    }`}
+                  />
+                  <span>{chatMode === 'web-search' ? 'Web Search (Mode)' : 'Web Search'}</span>
+                  {(chatMode === 'web-search' || webSearchEnabled) && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 ml-0.5" />
+                  )}
                 </button>
               </div>
 
@@ -972,9 +1205,19 @@ export const ChatPage: React.FC = () => {
               </div>
 
               <div className="p-3.5 rounded-xl bg-[#1a1a1a] border border-[#333] space-y-2">
-                <h4 className="font-semibold text-white text-sm">SearXNG Live Web Search</h4>
+                <h4 className="font-semibold text-white text-sm">SearXNG Live Web Search & Web Search Mode</h4>
                 <p>
-                  When you need real-time data from the internet, toggle the <strong>Web Search</strong> button in the chat input. Ruby queries your SearXNG instance and integrates live web results, citing URLs with clickable source badges.
+                  Switch to <strong>Web Search Mode</strong> to search the internet exclusively via SearXNG without querying local course documents. Or use the <strong>Web Search</strong> toggle button in any other mode to enrich answers with live web intelligence.
+                </p>
+                <p>
+                  Web results are cited with direct links <span className="font-mono text-sky-400">[Web #1]</span> so you can jump straight to external references.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#1a1a1a] border border-[#333] space-y-2">
+                <h4 className="font-semibold text-white text-sm">Claude-Style Activity Trace & AI Thinking</h4>
+                <p>
+                  Watch real-time operational steps unfold as Ruby analyzes your query, searches course documents, executes SearXNG web queries, and validates citations. For reasoning models, the internal chain of thought streams live in a collapsible thought process box.
                 </p>
               </div>
 

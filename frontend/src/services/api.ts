@@ -449,6 +449,8 @@ export function streamChat(
     onWebSearchStart?: (query: string) => void;
     onWebSources?: (sources: any[]) => void;
     onWebSearchError?: (error: string) => void;
+    onStep?: (step: any) => void;
+    onThinkToken?: (token: string) => void;
     onToken?: (token: string) => void;
     onDone?: (data: any) => void;
     onError?: (error: string) => void;
@@ -499,6 +501,10 @@ export function streamChat(
                 callbacks.onWebSources(parsed.sources || []);
               } else if (currentEvent === 'web_search_error' && callbacks.onWebSearchError) {
                 callbacks.onWebSearchError(parsed.error || 'Web search warning');
+              } else if (currentEvent === 'step' && callbacks.onStep) {
+                callbacks.onStep(parsed.step);
+              } else if (currentEvent === 'think_token' && callbacks.onThinkToken) {
+                callbacks.onThinkToken(parsed.content || '');
               } else if (currentEvent === 'token' && callbacks.onToken) {
                 callbacks.onToken(parsed.content || '');
               } else if (currentEvent === 'done' && callbacks.onDone) {

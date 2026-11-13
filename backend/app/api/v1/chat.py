@@ -68,7 +68,7 @@ class ConversationSummary(BaseModel):
 class SendMessageRequest(BaseModel):
     conversation_id: str
     content: str = Field(..., min_length=1)
-    mode: str = Field(default="resource-grounded", description="resource-grounded, general, hybrid, research")
+    mode: str = Field(default="resource-grounded", description="resource-grounded, general, hybrid, research, web-search")
     subject_id: Optional[str] = None
     document_ids: Optional[List[str]] = None
     provider_id: Optional[str] = None
