@@ -584,7 +584,7 @@ class ChatEngine:
                 seen_urls = set()
                 total_latency = 0.0
                 for fq in focused_queries:
-                    web_res = await searxng_client.search(query=fq, num_results=4)
+                    web_res = await searxng_client.search(query=fq, num_results=6)
                     total_latency += web_res.latency_ms
                     if web_res.results:
                         for r in web_res.results:

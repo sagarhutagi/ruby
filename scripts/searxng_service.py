@@ -252,15 +252,36 @@ async def search_endpoint(
         except Exception as e:
             logger.warning(f"Error gathering search task: {e}")
 
+    news_results = [r for r in combined_results if r.get("category") == "news"]
+    web_results = [r for r in combined_results if r.get("category") != "news" and r.get("engine") != "wikipedia"]
+    wiki_results = [r for r in combined_results if r.get("engine") == "wikipedia"]
+
+    # When querying for news, current events, or recent developments, prioritize news engines and web articles
+    # over static encyclopedia pages so breaking news is never crowded out.
+    is_news_intent = any(
+        w in clean_q.lower()
+        for w in [
+            "news", "latest", "recent", "today", "current", "update", "happened",
+            "resigned", "resignation", "scandal", "fired", "affair", "breaking"
+        ]
+    )
+
+    if is_news_intent:
+        final_results = news_results + web_results + wiki_results[:2]
+    else:
+        # Balanced: news first if any, then web, then wiki
+        final_results = news_results + web_results + wiki_results
+
     logger.info(
-        f"Search query='{clean_q}' completed with {len(combined_results)} results "
-        f"({len(done)} tasks finished, {len(pending)} timed out)."
+        f"Search query='{clean_q}' completed with {len(final_results)} results "
+        f"(news={len(news_results)}, web={len(web_results)}, wiki={len(wiki_results)}, "
+        f"{len(done)} tasks finished, {len(pending)} timed out)."
     )
 
     return {
         "query": clean_q,
-        "number_of_results": len(combined_results),
-        "results": combined_results,
+        "number_of_results": len(final_results),
+        "results": final_results,
     }
 
 
