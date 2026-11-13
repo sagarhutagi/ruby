@@ -216,17 +216,17 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 12 --- Packaging and documentation
-- [ ] Create robust startup script (`start.sh`).
-- [ ] Create shutdown script (`stop.sh`).
-- [ ] Add prerequisite checker for Linux environments.
-- [ ] Add environment setup instructions.
-- [ ] Add production frontend build and static serving in FastAPI.
-- [ ] Add database and file backup and restore scripts.
-- [ ] Complete README with quickstart and feature documentation.
-- [ ] Complete architecture documentation.
-- [ ] Complete API reference documentation.
-- [ ] Complete troubleshooting guide.
-- [ ] Test clean installation flow on Linux.
-- [ ] Verify system restart, state persistence, and backup restoration.
+- [x] Create robust startup script (`start.sh`).
+- [x] Create shutdown script (`stop.sh`).
+- [x] Add prerequisite checker for Linux environments.
+- [x] Add environment setup instructions.
+- [x] Add production frontend build and static serving in FastAPI.
+- [x] Add database and file backup and restore scripts.
+- [x] Complete README with quickstart and feature documentation.
+- [x] Complete architecture documentation.
+- [x] Complete API reference documentation.
+- [x] Complete troubleshooting guide.
+- [x] Test clean installation flow on Linux.
+- [x] Verify system restart, state persistence, and backup restoration.
 
 **Acceptance criteria:** A new installation can be started using documented commands, data persists across restarts, and backup restoration works.

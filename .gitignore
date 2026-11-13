@@ -39,6 +39,9 @@ backend/data/
 *.db
 *.pid
 chroma/
+backups/
+data_pre_restore_*
+*.tar.gz
 
 # Environment variables & secrets
 .env

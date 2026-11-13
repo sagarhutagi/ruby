@@ -1,7 +1,23 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AnalyticsPage } from '../pages/AnalyticsPage';
+
+vi.mock('../services/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api')>();
+  return {
+    ...actual,
+    checkModelFit: vi.fn().mockResolvedValue({
+      model: 'llama3.2:3b',
+      fits_vram: true,
+      fits_ram: true,
+      recommended: true,
+      vram_usage_est_mb: 2000,
+      system_vram_free_mb: 4000,
+      reason: 'Model comfortably fits within available resources.',
+    }),
+  };
+});
 
 const createTestQueryClient = () => {
   const qc = new QueryClient({
