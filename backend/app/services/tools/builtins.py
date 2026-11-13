@@ -334,6 +334,39 @@ async def tool_search_knowledge_graph(
     }
 
 
+# 16. Save Memory Tool
+async def tool_save_memory(
+    content: str,
+    memory_type: str = "profile",
+    is_pinned: bool = False,
+    session: Optional[AsyncSession] = None,
+) -> Dict[str, Any]:
+    """Saves a user preference, academic score/record, formula, or detail into long-term memory."""
+    if not session:
+        return {"success": False, "error": "Database session required for saving memory."}
+
+    clean_content = content.strip()
+    if not clean_content:
+        return {"success": False, "error": "Memory content cannot be empty."}
+
+    from app.services.memory.service import memory_service
+    mem = await memory_service.create_memory(
+        session=session,
+        content=clean_content,
+        memory_type=memory_type,
+        is_pinned=is_pinned,
+        source_event="tool_save_memory",
+    )
+    return {
+        "success": True,
+        "memory_id": mem.id,
+        "content": mem.content,
+        "memory_type": mem.memory_type,
+        "is_pinned": mem.is_pinned,
+        "message": f"Successfully stored memory in {mem.memory_type} tier.",
+    }
+
+
 def register_all_builtin_tools() -> None:
     """Register all built-in academic and system tools in Ruby ToolRegistry."""
     # 1. web_search
@@ -606,6 +639,30 @@ def register_all_builtin_tools() -> None:
         permission_level="read",
         timeout_seconds=5.0,
         category="academic",
+    )
+
+    # 16. save_memory
+    tool_registry.register(
+        name="save_memory",
+        description="Explicitly store a fact, user profile detail, academic score/exam grade, learning difficulty, or preference into Ruby's persistent long-term memory.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "The exact fact, score, or preference to store."},
+                "memory_type": {
+                    "type": "string",
+                    "enum": ["profile", "episodic", "semantic", "procedural"],
+                    "default": "profile",
+                    "description": "Memory tier: 'profile' for user preferences/identity, 'episodic' for exam scores/past difficulties, 'semantic' for academic facts, 'procedural' for workflow rules.",
+                },
+                "is_pinned": {"type": "boolean", "default": False, "description": "Whether to pin this memory for high-priority recall."},
+            },
+            "required": ["content"],
+        },
+        handler=tool_save_memory,
+        permission_level="write",
+        timeout_seconds=5.0,
+        category="system",
     )
 
 

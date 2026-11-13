@@ -370,10 +370,8 @@ class MemoryService:
 
         # Split text into candidate statements (by line and sentence boundaries)
         raw_statements: List[str] = []
-        for block in text.split("\n"):
-            block_clean = block.strip()
-            if not block_clean:
-                continue
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        for block_clean in lines:
             # If the block contains multiple punctuated sentences, check each sentence
             sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", block_clean) if len(s.strip()) > 8]
             if len(sentences) > 1:
@@ -381,15 +379,26 @@ class MemoryService:
             else:
                 raw_statements.append(block_clean)
 
+        # For multi-line cohesive snippets where individual lines are short fragments (e.g. course code + exam name + marks paste),
+        # also evaluate the combined single-line text when lines contain fragmented scores/grades.
+        if len(lines) > 1 and any(len(l) < 30 for l in lines):
+            if any(re.search(r"\b(?:\d+(?:\.\d+)?\s*(?:/|out of)\s*\d+(?:\.\d+)?)\b", l) for l in lines):
+                combined_lines = " - ".join(lines)
+                if 15 <= len(combined_lines) <= 400 and combined_lines not in raw_statements:
+                    raw_statements.append(combined_lines)
+
         profile_triggers = [
             "i prefer", "i like", "i dislike", "i hate", "my goal is", "i am studying",
             "i am preparing for", "i want explanations in", "my name is", "call me",
             "my favorite", "my background is", "my major is", "my field is", "i live in",
-            "i am an", "i am a", "as a student", "as an engineer"
+            "i am an", "i am a", "as a student", "as an engineer", "i study at", "my university",
+            "my college", "my roll number", "my usn", "my prn", "my id is", "my email is",
+            "my gpa", "my cgpa", "my marks", "my score", "my grade", "my exam", "i scored", "i got"
         ]
         episodic_triggers = [
             "i struggled with", "i was confused by", "i made a mistake", "i keep forgetting",
-            "i don't understand", "i failed to", "my weak area is", "i had difficulty with"
+            "i don't understand", "i failed to", "my weak area is", "i had difficulty with",
+            "isa 1", "isa 2", "cie 1", "cie 2", "midterm", "final exam", "semester exam"
         ]
         procedural_triggers = [
             "always show", "always format", "preferred workflow", "never include",
@@ -400,9 +409,13 @@ class MemoryService:
             "is defined as", "formula for", "the theorem states", "key property of",
             "algorithm operates on", "complexity is"
         ]
+        academic_score_pat = re.compile(
+            r"(?:\b[A-Z]{2,}\d+[A-Z0-9-]*\b.*)?(?:\b(?:isa|cie|midterm|final|exam|test|quiz|assignment)\s*\d*.*)?\b(?:\d+(?:\.\d+)?\s*(?:/|out of)\s*\d+(?:\.\d+)?)\b",
+            re.IGNORECASE,
+        )
 
         remember_pat = re.compile(
-            r"^(?:please\s+)?(?:remember|keep in mind|note|don't forget)(?:\s+that)?:?\s*(.*)$",
+            r"^(?:(?:can|could|will)\s+you\s+)?(?:please\s+)?(?:yes\s+)?(?:remember|keep in mind|note|don't forget|store|save|record|track|log|memorize)(?:\s+(?:this|that|in memory|all the result|the result|all results))?(?:\s+that)?:?\s*(.*)$",
             re.IGNORECASE,
         )
 
@@ -414,11 +427,13 @@ class MemoryService:
                 continue
 
             # Skip questions: user queries asking for information should not be formed into memories
-            if statement_clean.endswith("?") or re.match(
-                r"^(?:what|who|where|when|why|how|can you|could you|do you|tell me|is there|are there)\b",
+            # unless the question is explicitly asking Ruby to remember/store something
+            is_query_format = bool(re.match(
+                r"^(?:what|who|where|when|why|how|tell me|is there|are there)\b",
                 statement_clean,
                 re.IGNORECASE,
-            ):
+            ))
+            if is_query_format and not any(w in statement_clean.lower() for w in ["remember", "store", "save", "keep in mind"]):
                 continue
 
             lower = statement_clean.lower()
@@ -426,7 +441,7 @@ class MemoryService:
             imp = 0.5
             is_explicit_remember = False
 
-            # Check explicit remember directive
+            # Check explicit remember/store directive
             rem_match = remember_pat.match(statement_clean)
             extracted_statement = statement_clean
             if rem_match and rem_match.group(1).strip():
@@ -439,9 +454,9 @@ class MemoryService:
             if any(t in lower for t in profile_triggers):
                 m_type = "profile"
                 imp = max(imp, 0.85 if is_explicit_remember else 0.8)
-            elif any(t in lower for t in episodic_triggers):
+            elif any(t in lower for t in episodic_triggers) or academic_score_pat.search(statement_clean):
                 m_type = "episodic"
-                imp = max(imp, 0.7)
+                imp = max(imp, 0.85 if academic_score_pat.search(statement_clean) else 0.7)
             elif any(t in lower for t in procedural_triggers):
                 m_type = "procedural"
                 imp = max(imp, 0.85)
@@ -449,7 +464,7 @@ class MemoryService:
                 m_type = "semantic"
                 imp = max(imp, 0.65)
             elif is_explicit_remember:
-                m_type = "profile"
+                m_type = "profile" if any(w in lower for w in ["my", "i am", "i have", "i prefer", "call me"]) else "semantic"
                 imp = 0.85
 
             if m_type:

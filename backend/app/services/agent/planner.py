@@ -79,6 +79,18 @@ class AgentPlanner:
             else:
                 tools_to_call.append({"name": "get_system_info", "arguments": {}})
 
+        # 6. Explicit Memory Save detection
+        if any(w in prompt.lower() for w in ["store in memory", "save in memory", "save to memory", "store my", "save my", "remember my", "remember this", "save this", "store this"]):
+            mem_type = "profile" if any(w in prompt.lower() for w in ["my name", "my favorite", "i prefer", "call me"]) else "episodic"
+            tools_to_call.append({
+                "name": "save_memory",
+                "arguments": {
+                    "content": prompt,
+                    "memory_type": mem_type,
+                    "is_pinned": mem_type == "profile",
+                },
+            })
+
         return {
             "effective_mode": effective_mode,
             "mode_explanation": mode_explanation,

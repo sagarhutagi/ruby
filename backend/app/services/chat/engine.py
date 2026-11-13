@@ -373,6 +373,29 @@ class ChatEngine:
                 text=user_content,
                 conversation_id=conversation_id,
             )
+
+            # If no candidates extracted from this single prompt, but user is confirming/instructing to store
+            # (e.g. "yes store all the result", "save this in memory", "remember this"),
+            # resolve context from the previous user message in the conversation:
+            if not candidates and any(w in user_content.lower() for w in ["store", "save", "remember", "keep in mind", "record"]):
+                if conversation_id:
+                    prev_stmt = (
+                        select(Message)
+                        .where(Message.conversation_id == conversation_id, Message.role == "user")
+                        .order_by(Message.created_at.desc())
+                        .limit(3)
+                    )
+                    prev_msgs = (await session.execute(prev_stmt)).scalars().all()
+                    for pm in prev_msgs:
+                        if pm.content.strip() != user_content.strip() and len(pm.content.strip()) > 8:
+                            candidates = await memory_service.extract_candidates(
+                                session=session,
+                                text=pm.content,
+                                conversation_id=conversation_id,
+                            )
+                            if candidates:
+                                break
+
             for cand in candidates:
                 if not cand.get("is_duplicate"):
                     stmt_to_save = cand.get("normalized_content") or cand["content"]
@@ -475,6 +498,16 @@ class ChatEngine:
                     "data": t_res.data,
                     "error": t_res.error,
                 })
+                if t_name == "save_memory" and t_res.success and t_res.data:
+                    yield {
+                        "type": "memory_saved",
+                        "memory": {
+                            "id": t_res.data.get("memory_id"),
+                            "content": t_res.data.get("content"),
+                            "memory_type": t_res.data.get("memory_type"),
+                            "is_pinned": t_res.data.get("is_pinned", False),
+                        },
+                    }
 
         # 3. Retrieval Step (if grounded, hybrid, research, or document_search planned)
         retrieved_chunks: List[RetrievedChunk] = []

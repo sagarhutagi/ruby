@@ -186,3 +186,41 @@ async def test_course_materials_intact_and_preserved(session):
 
     # Verify existing documents are present
     assert len(docs) >= 1, "User course documents must remain preserved in SQLite database."
+
+
+@pytest.mark.asyncio
+async def test_academic_record_and_save_memory_tool(session):
+    """Verify save_memory tool execution and academic score multi-line extraction."""
+    from app.services.memory.service import memory_service
+
+    # 1. Verify save_memory tool registered
+    assert "save_memory" in [t.name for t in tool_registry.list_tools()]
+
+    # 2. Execute save_memory tool
+    tool_res = await tool_registry.execute(
+        "save_memory",
+        {
+            "content": "Passed Computer Networks midterm with 45/50",
+            "memory_type": "episodic",
+            "is_pinned": True,
+        },
+        session=session,
+    )
+    assert tool_res.success is True
+    assert tool_res.data["memory_type"] == "episodic"
+    created_id = tool_res.data["memory_id"]
+
+    # 3. Verify multi-line academic score paste extraction
+    academic_paste = (
+        "UZ25UZ221A - CIE Essentials of Innovation & Entrepreneurship - I\n"
+        "ISA 1\n"
+        "37 /45.0"
+    )
+    candidates = await memory_service.extract_candidates(session, academic_paste)
+    assert len(candidates) >= 1
+    top_cand = candidates[0]
+    assert "37" in top_cand["content"]
+    assert top_cand["memory_type"] == "episodic"
+
+    # Clean up test memory
+    await memory_service.delete_memory(session, created_id)
