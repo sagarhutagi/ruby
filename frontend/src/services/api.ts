@@ -58,6 +58,54 @@ export interface DiscoveredModel {
   description?: string;
 }
 
+export interface SystemResources {
+  cpu: {
+    percent: number;
+    core_count: number;
+    frequency_mhz?: number;
+  };
+  ram: {
+    total_mb: number;
+    used_mb: number;
+    available_mb: number;
+    percent: number;
+  };
+  disk: {
+    total_gb: number;
+    used_gb: number;
+    free_gb: number;
+    percent: number;
+    path: string;
+  };
+  gpu: {
+    available: boolean;
+    name?: string;
+    vram_total_mb: number;
+    vram_used_mb: number;
+    vram_free_mb: number;
+    utilization_percent: number;
+    temperature_c?: number;
+    error?: string;
+  };
+  ollama: {
+    running: boolean;
+    version?: string;
+    installed_models: string[];
+    running_models: string[];
+    error?: string;
+  };
+}
+
+export interface ModelFitResult {
+  model_name: string;
+  estimated_params_b: number;
+  estimated_vram_needed_mb: number;
+  vram_available_mb: number;
+  fit_tier: 'optimal' | 'tight' | 'exceeds_vram';
+  recommendation: string;
+  warning?: string;
+}
+
 export async function fetchProviders(): Promise<ProviderItem[]> {
   const res = await fetch(`${API_BASE}/providers`);
   if (!res.ok) throw new Error('Failed to fetch providers');
@@ -91,5 +139,17 @@ export async function testProvider(id: string): Promise<TestResult> {
 export async function fetchProviderModels(id: string): Promise<DiscoveredModel[]> {
   const res = await fetch(`${API_BASE}/providers/${id}/models`);
   if (!res.ok) throw new Error('Failed to discover models');
+  return res.json();
+}
+
+export async function fetchSystemResources(): Promise<SystemResources> {
+  const res = await fetch(`${API_BASE}/system/resources`);
+  if (!res.ok) throw new Error('Failed to fetch system telemetry');
+  return res.json();
+}
+
+export async function checkModelFit(model: string): Promise<ModelFitResult> {
+  const res = await fetch(`${API_BASE}/system/model-check?model=${encodeURIComponent(model)}`);
+  if (!res.ok) throw new Error('Failed to evaluate model memory fit');
   return res.json();
 }

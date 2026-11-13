@@ -57,14 +57,14 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 3 --- Hardware and system monitoring
-- [ ] Detect CPU and RAM utilization.
-- [ ] Detect GPU and VRAM metrics where available via NVML/nvidia-smi.
-- [ ] Detect disk usage across application storage partitions.
-- [ ] Detect Ollama running status and loaded models.
-- [ ] Show model loading/inference status where available.
-- [ ] Add hardware-aware model warnings (VRAM limits for 4B-8B quantised models).
-- [ ] Add system resource dashboard in UI.
-- [ ] Test graceful fallback behavior when monitoring tools or GPUs are absent.
+- [x] Detect CPU and RAM utilization.
+- [x] Detect GPU and VRAM metrics where available via NVML/nvidia-smi.
+- [x] Detect disk usage across application storage partitions.
+- [x] Detect Ollama running status and loaded models.
+- [x] Show model loading/inference status where available.
+- [x] Add hardware-aware model warnings (VRAM limits for 4B-8B quantised models).
+- [x] Add system resource dashboard in UI.
+- [x] Test graceful fallback behavior when monitoring tools or GPUs are absent.
 
 **Acceptance criteria:** Dashboard metrics are real, labelled and gracefully unavailable when unsupported.
 

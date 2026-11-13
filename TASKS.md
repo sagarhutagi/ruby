@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 2 (AI Provider Infrastructure) -> Complete. Beginning Phase 3 (Hardware and System Monitoring)
+- **Current Phase:** Phase 3 (Hardware and System Monitoring) -> Complete. Beginning Phase 4 (Document Ingestion and Library)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -45,12 +45,12 @@
 - [x] Mocked adapter and secrets unit tests with 100% pass rate.
 
 ### Phase 3: Hardware & System Monitoring
-- [ ] NVML / nvidia-smi GPU and VRAM detector.
-- [ ] psutil CPU, RAM, and Disk metrics.
-- [ ] Ollama service health and model status probe.
-- [ ] Hardware-aware model warnings and recommendations.
-- [ ] System resource dashboard component.
-- [ ] Unit tests with mocked and real hardware probes.
+- [x] NVML / nvidia-smi GPU and VRAM detector in `app/core/hardware.py`.
+- [x] psutil CPU, RAM, and Disk metrics.
+- [x] Ollama service health and model status probe.
+- [x] Hardware-aware model memory evaluation & warnings (4B-8B vs 14B+ models).
+- [x] System resource dashboard component in `frontend/src/pages/AnalyticsPage.tsx`.
+- [x] Unit tests for hardware monitoring and graceful fallbacks.
 
 ### Phase 4: Document Ingestion & Library
 - [ ] Multi-format parsers (PDF, DOCX, PPTX, XLSX, CSV, HTML, Markdown, EPUB, Images/OCR).
