@@ -1063,5 +1063,192 @@ export async function generateTruthTable(expression: string): Promise<TruthTable
   return res.json();
 }
 
+// ==================== Knowledge Graph & Obsidian API ====================
+
+export interface KnowledgeNodeItem {
+  id: string;
+  label: string;
+  node_type: string;
+  description?: string;
+  subject_id?: string;
+  document_id?: string;
+  position_x: number;
+  position_y: number;
+  is_verified: boolean;
+  created_at?: string;
+}
+
+export interface KnowledgeEdgeItem {
+  id: string;
+  source_id: string;
+  target_id: string;
+  relationship_type: string;
+  is_verified: boolean;
+}
+
+export interface GraphData {
+  nodes: KnowledgeNodeItem[];
+  edges: KnowledgeEdgeItem[];
+}
+
+export interface PrerequisiteChainResult {
+  target: KnowledgeNodeItem;
+  prerequisites_count: number;
+  study_order: KnowledgeNodeItem[];
+}
+
+export interface ObsidianPreviewResult {
+  vault_path: string;
+  total_notes: number;
+  files_to_create: string[];
+  files_to_overwrite: string[];
+  has_conflicts: boolean;
+}
+
+export interface ObsidianExportResult {
+  vault_path: string;
+  written_count: number;
+  skipped_count: number;
+  written_files: string[];
+  skipped_files: string[];
+}
+
+export async function fetchGraph(
+  subjectId?: string,
+  nodeType?: string,
+  verifiedOnly?: boolean
+): Promise<GraphData> {
+  const params = new URLSearchParams();
+  if (subjectId) params.append('subject_id', subjectId);
+  if (nodeType) params.append('node_type', nodeType);
+  if (verifiedOnly) params.append('verified_only', 'true');
+
+  const res = await fetch(`${API_BASE}/graph?${params.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch knowledge graph');
+  return res.json();
+}
+
+export async function createGraphNode(data: {
+  label: string;
+  node_type?: string;
+  description?: string;
+  subject_id?: string;
+  document_id?: string;
+  position_x?: number;
+  position_y?: number;
+  is_verified?: boolean;
+}): Promise<KnowledgeNodeItem> {
+  const res = await fetch(`${API_BASE}/graph/nodes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to create node');
+  return res.json();
+}
+
+export async function updateGraphNode(
+  nodeId: string,
+  data: Partial<KnowledgeNodeItem>
+): Promise<KnowledgeNodeItem> {
+  const res = await fetch(`${API_BASE}/graph/nodes/${nodeId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to update node');
+  return res.json();
+}
+
+export async function deleteGraphNode(nodeId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/graph/nodes/${nodeId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete node');
+}
+
+export async function createGraphEdge(data: {
+  source_id: string;
+  target_id: string;
+  relationship_type?: string;
+  is_verified?: boolean;
+}): Promise<KnowledgeEdgeItem> {
+  const res = await fetch(`${API_BASE}/graph/edges`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to create edge');
+  }
+  return res.json();
+}
+
+export async function deleteGraphEdge(edgeId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/graph/edges/${edgeId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete edge');
+}
+
+export async function fetchPrerequisites(nodeId: string): Promise<PrerequisiteChainResult> {
+  const res = await fetch(`${API_BASE}/graph/prerequisites/${nodeId}`);
+  if (!res.ok) throw new Error('Failed to fetch prerequisites');
+  return res.json();
+}
+
+export async function extractGraphFromDocument(documentId: string): Promise<{
+  document_id: string;
+  document_title: string;
+  nodes_created: number;
+  edges_created: number;
+  concepts: string[];
+}> {
+  const res = await fetch(`${API_BASE}/graph/extract-from-document/${documentId}`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to extract concepts from document');
+  return res.json();
+}
+
+export async function previewObsidianExport(
+  vaultPath: string,
+  subjectId?: string
+): Promise<ObsidianPreviewResult> {
+  const res = await fetch(`${API_BASE}/graph/obsidian/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vault_path: vaultPath, subject_id: subjectId || null }),
+  });
+  if (!res.ok) throw new Error('Failed to preview Obsidian export');
+  return res.json();
+}
+
+export async function exportToObsidianVault(
+  vaultPath: string,
+  subjectId?: string,
+  allowOverwrite = false
+): Promise<ObsidianExportResult> {
+  const res = await fetch(`${API_BASE}/graph/obsidian/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      vault_path: vaultPath,
+      subject_id: subjectId || null,
+      allow_overwrite: allowOverwrite,
+    }),
+  });
+  if (!res.ok) throw new Error('Failed to export Obsidian vault');
+  return res.json();
+}
+
+export function getObsidianZipUrl(subjectId?: string): string {
+  return subjectId
+    ? `${API_BASE}/graph/obsidian/export-zip?subject_id=${subjectId}`
+    : `${API_BASE}/graph/obsidian/export-zip`;
+}
+
+
 
 

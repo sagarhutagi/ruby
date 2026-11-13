@@ -170,15 +170,15 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 9 --- Knowledge graph and Obsidian
-- [ ] Implement graph node and edge models in SQLite.
-- [ ] Implement graph CRUD APIs.
-- [ ] Implement React Flow visualization with interactive node inspection.
-- [ ] Add subject and relation filtering.
-- [ ] Mark unverified AI suggestions with distinctive tags.
-- [ ] Implement Obsidian vault path selection.
-- [ ] Implement Markdown export with YAML frontmatter and `[[wikilinks]]`.
-- [ ] Implement vault conflict preview and overwrite protection.
-- [ ] Add integration tests for graph queries and vault export.
+- [x] Implement graph node and edge models in SQLite.
+- [x] Implement graph CRUD APIs.
+- [x] Implement React Flow visualization with interactive node inspection.
+- [x] Add subject and relation filtering.
+- [x] Mark unverified AI suggestions with distinctive tags.
+- [x] Implement Obsidian vault path selection.
+- [x] Implement Markdown export with YAML frontmatter and `[[wikilinks]]`.
+- [x] Implement vault conflict preview and overwrite protection.
+- [x] Add integration tests for graph queries and vault export.
 
 **Acceptance criteria:** Users can inspect and edit concept relationships and export notes without accidental vault modification.
 

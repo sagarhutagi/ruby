@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 8 (Academic Learning Tools) -> Complete. Beginning Phase 9 (Knowledge Graph & Obsidian Exporter)
+- **Current Phase:** Phase 9 (Knowledge Graph & Obsidian) -> Complete. Beginning Phase 10 (Analytics & Diagnostics)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -97,10 +97,10 @@
 - [x] Academic tool tests.
 
 ### Phase 9: Knowledge Graph & Obsidian
-- [ ] Graph node and edge schemas.
-- [ ] React Flow interactive knowledge graph.
-- [ ] Obsidian vault exporter with frontmatter and wikilinks.
-- [ ] Vault conflict handling and tests.
+- [x] Graph node and edge schemas.
+- [x] React Flow interactive knowledge graph.
+- [x] Obsidian vault exporter with frontmatter and wikilinks.
+- [x] Vault conflict handling and tests.
 
 ### Phase 10: Analytics & Diagnostics
 - [ ] Document and study progress analytics.
