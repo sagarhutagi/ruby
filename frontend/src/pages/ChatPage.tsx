@@ -600,7 +600,7 @@ export const ChatPage: React.FC = () => {
                         </div>
                         <span className="font-medium text-white text-sm">Ruby</span>
                         <span>•</span>
-                        <span className="capitalize">{msg.mode || 'Grounded'}</span>
+                        <span className="capitalize">{(msg.mode || 'Grounded').replace('-', ' ')}</span>
                         {msg.diagnostics?.requested_mode === 'auto' && (
                           <span
                             className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-700/50"
