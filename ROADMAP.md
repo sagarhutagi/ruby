@@ -185,14 +185,14 @@ Follow this roadmap strictly in sequential order. A phase is complete only when 
 ---
 
 ## Phase 10 --- Analytics and resource diagnostics
-- [ ] Implement document analytics (storage, formats, chunk counts).
-- [ ] Implement study analytics (time spent, retention, quiz accuracy).
-- [ ] Implement AI token usage and latency tracking.
-- [ ] Implement reliable cost estimates where pricing tables are known.
-- [ ] Implement retrieval inspection UI (scores, queries, assembled context).
-- [ ] Implement system diagnostics view.
-- [ ] Implement sanitized diagnostic report export (secrets redacted).
-- [ ] Verify all displayed statistics reflect measured data.
+- [x] Implement document analytics (storage, formats, chunk counts).
+- [x] Implement study analytics (time spent, retention, quiz accuracy).
+- [x] Implement AI token usage and latency tracking.
+- [x] Implement reliable cost estimates where pricing tables are known.
+- [x] Implement retrieval inspection UI (scores, queries, assembled context).
+- [x] Implement system diagnostics view.
+- [x] Implement sanitized diagnostic report export (secrets redacted).
+- [x] Verify all displayed statistics reflect measured data.
 
 **Acceptance criteria:** Analytics and diagnostics are derived from actual stored events and system measurements.
 

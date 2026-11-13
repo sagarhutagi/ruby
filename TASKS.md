@@ -1,7 +1,7 @@
 # Tasks & Work Log: RUBY
 
 ## Task Summary
-- **Current Phase:** Phase 9 (Knowledge Graph & Obsidian) -> Complete. Beginning Phase 10 (Analytics & Diagnostics)
+- **Current Phase:** Phase 10 (Analytics & Diagnostics) -> Complete. Beginning Phase 11 (Security & Hardening)
 - **Status:** In Progress
 - **Last Updated:** 2026-11-13
 
@@ -103,10 +103,10 @@
 - [x] Vault conflict handling and tests.
 
 ### Phase 10: Analytics & Diagnostics
-- [ ] Document and study progress analytics.
-- [ ] AI token and latency tracking.
-- [ ] System diagnostics and sanitized log export.
-- [ ] Verification of real measured data.
+- [x] Document and study progress analytics.
+- [x] AI token and latency tracking.
+- [x] System diagnostics and sanitized log export.
+- [x] Verification of real measured data.
 
 ### Phase 11: Security & Hardening
 - [ ] Comprehensive security audit (inputs, paths, sandbox, secrets).

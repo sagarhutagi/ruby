@@ -1249,6 +1249,103 @@ export function getObsidianZipUrl(subjectId?: string): string {
     : `${API_BASE}/graph/obsidian/export-zip`;
 }
 
+// ==================== Analytics & Diagnostics API ====================
+
+export interface DocumentAnalytics {
+  total_documents: number;
+  total_storage_bytes: number;
+  total_storage_mb: number;
+  total_chunks: number;
+  by_file_type: Record<string, number>;
+  by_status: Record<string, number>;
+  by_subject: Record<string, number>;
+}
+
+export interface StudyAnalytics {
+  flashcards: {
+    total_cards: number;
+    total_reviews: number;
+    average_stability_days: number;
+    average_difficulty: number;
+    ratings_distribution: Record<string, number>;
+  };
+  quizzes: {
+    total_quizzes_taken: number;
+    average_score_percentage: number;
+    total_questions_answered: number;
+    correct_answers: number;
+    accuracy_percentage: number;
+  };
+  study_time: {
+    total_sessions: number;
+    total_minutes: number;
+    total_hours: number;
+  };
+  knowledge_graph: {
+    total_concepts: number;
+    verified_concepts: number;
+    ai_suggested_concepts: number;
+  };
+}
+
+export interface TokenAnalytics {
+  total_messages: number;
+  total_tokens_consumed: number;
+  total_estimated_cost_usd: number;
+  by_provider: Record<string, { tokens: number; message_count: number; estimated_cost_usd: number }>;
+  by_model: Record<string, { tokens: number; messages: number }>;
+  by_mode: Record<string, { messages: number; tokens: number }>;
+}
+
+export interface SanitizedDiagnosticReport {
+  report_generated_at: string;
+  ruby_version: string;
+  environment: Record<string, any>;
+  hardware: Record<string, any>;
+  storage_diagnostics: Record<string, any>;
+  configured_providers: any[];
+  security_compliance: Record<string, string>;
+}
+
+export async function fetchAnalyticsOverview(): Promise<{
+  documents: DocumentAnalytics;
+  study: StudyAnalytics;
+  tokens: TokenAnalytics;
+}> {
+  const res = await fetch(`${API_BASE}/analytics/overview`);
+  if (!res.ok) throw new Error('Failed to fetch analytics overview');
+  return res.json();
+}
+
+export async function fetchDocumentAnalytics(): Promise<DocumentAnalytics> {
+  const res = await fetch(`${API_BASE}/analytics/documents`);
+  if (!res.ok) throw new Error('Failed to fetch document analytics');
+  return res.json();
+}
+
+export async function fetchStudyAnalytics(): Promise<StudyAnalytics> {
+  const res = await fetch(`${API_BASE}/analytics/study`);
+  if (!res.ok) throw new Error('Failed to fetch study analytics');
+  return res.json();
+}
+
+export async function fetchTokenAnalytics(): Promise<TokenAnalytics> {
+  const res = await fetch(`${API_BASE}/analytics/tokens`);
+  if (!res.ok) throw new Error('Failed to fetch token analytics');
+  return res.json();
+}
+
+export async function fetchDiagnosticReport(): Promise<SanitizedDiagnosticReport> {
+  const res = await fetch(`${API_BASE}/analytics/diagnostics`);
+  if (!res.ok) throw new Error('Failed to fetch diagnostic report');
+  return res.json();
+}
+
+export function getDiagnosticExportUrl(): string {
+  return `${API_BASE}/analytics/diagnostics/export`;
+}
+
+
 
 
 
